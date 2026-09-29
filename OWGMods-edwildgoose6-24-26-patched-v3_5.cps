@@ -1614,7 +1614,8 @@ function writeProbeCycle(cycle, x, y, z) {
       if (getProperty("probingType") == "Renishaw") {
         writeBlock(gFormat.format(65), "P" + 8814, "D" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
       } else {
-        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
+        // Upstream commit 213dc15: Blum circular boss Z height offset for probe stylus radius
+        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth + (tool.diameter / 2)), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
         writeExtraBlumProbing(cycle);
       }
       break;
@@ -1623,7 +1624,8 @@ function writeProbeCycle(cycle, x, y, z) {
       if (getProperty("probingType") == "Renishaw") {
         writeBlock(gFormat.format(65), "P" + 8823, "A" + xyzFormat.format(cycle.partialCircleAngleA), "B" + xyzFormat.format(cycle.partialCircleAngleB), "C" + xyzFormat.format(cycle.partialCircleAngleC), "D" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
       } else {
-        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleA)), "U" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleB)), "V" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleC)), "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
+        // Upstream commit 213dc15: Blum partial circular boss Z height offset for probe stylus radius
+        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleA)), "U" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleB)), "V" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleC)), "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth + (tool.diameter / 2)), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
         writeExtraBlumProbing(cycle);
       }
       break;
