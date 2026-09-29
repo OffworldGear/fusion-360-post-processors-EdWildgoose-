@@ -13,6 +13,66 @@ Based on Ed Wildgoose's Brother Speedio post for Autodesk Fusion.
 
 ---
 
+## Quick start - which setter measures what?
+
+All measuring settings are in the NC Program dialog, **Post Process > Probing**, numbered 1-6.
+Two checkboxes are also on each operation's **Post Process** tab.
+
+**Every program prints a MEASUREMENT PLAN** at the top of the NC file (and in the post log)
+listing every tool, which setter it uses, and whether it will be measured. Read it before running.
+
+```
+(MEASUREMENT PLAN - LENGTH METHOD ZNANOCOMPARE)
+(START LENGTH CHECKED / START WEAR CHECKED)
+(T01 D6 LEN ZNANO+LASER CMP WEAR NO)
+(T03 D6 LEN ZNANO Z-NANO LIST WEAR NO)
+(T07 D12.7 LEN ZNANO+LASER CMP WEAR YES)
+(T12 D50 LEN ZNANO NO COMPARE OVER 24MM WEAR NO)
+(T14 D8 LEN NO [ZNANO+LASER CMP] WEAR NO)      <- not ticked: shows what it WOULD use
+(T20 D10 LEN NEVER WEAR NO)                     <- on the Never-measure list
+(T21 D16 LEN LASER LASER LIST WEAR NO)
+```
+
+### How each tool's length setter is chosen (first match wins)
+1. **6. Never measure tools** list or `[NO MEASURE]` tag: never measured (length or wear).
+2. **4. Z-Nano only tools** list or `[ZNANO LEN]` tag: Z-Nano, no laser compare.
+3. **5. Laser tools** list or `[LASER LEN]` tag: Laser NT writes the length (O6008 B3).
+4. Otherwise **1. Length method**:
+   - *Z-Nano only*
+   - *Z-Nano + laser compare* (default): Z-Nano writes the length, then the laser re-measures it in
+     compare-only mode (O6008 B2) and writes nothing. The laser never measures a length on its own
+     in this mode; B2 needs the Z-Nano value already in the table.
+   - *Laser only*
+
+Any tool the laser can't take (over 24 mm, or an inch program) automatically uses the Z-Nano.
+Lists are tool numbers (e.g. `3, 12, 20-25`), not pocket numbers. Tags go in the Fusion tool comment
+and stay with the tool in your library.
+
+### Which tools get measured at program start
+- **2. Measure length at program start**: *Off* / *Checked operations* (default) / *All tools*
+- **3. Laser wear check at program start**: *Off* / *Checked operations* (default) / *All tools*
+- *Checked operations* = tools used by any operation with **Measure tool length at start** or
+  **Laser wear check at start** ticked on its Post Process tab (or tagged `[LASER WEAR]`).
+- The whole start-of-program block is block-skippable: B.SKP ON skips it.
+
+### Recipes
+| I want to... | Set |
+|---|---|
+| Measure length with the Z-Nano and prove the laser | 1 = *Z-Nano + laser compare*, 2 = *Checked operations*, tick the ops |
+| Z-Nano only, no laser at all | 1 = *Z-Nano only* |
+| Laser for most tools, Z-Nano for a few | 1 = *Laser only*, list the few in 4 |
+| Z-Nano for most tools, laser for a few | 1 = *Z-Nano only* (or compare), list the few in 5 |
+| Skip a tool that fits neither setter | put it in 6 or tag `[NO MEASURE]` |
+| Check wear on finishing tools each run | 3 = *Checked operations*, tick **Laser wear check at start** on the finishing ops |
+| Check wear mid-program | Manual NC **Action** `laser_wear` before the operation |
+
+> **Mixing setters:** the Z-Nano and laser currently differ by roughly 10-20 µm. Until they are
+> calibrated to the same master, tools that finish the same floor or face should use the **same**
+> setter, or that difference appears as a step. Compare mode logs the difference per tool in
+> **#582** (tool in #581), so you can see when they agree.
+
+---
+
 ## Contents
 
 | File | Install where | Purpose |
@@ -49,27 +109,21 @@ Blum's own macros (O86xx, O89xx) are copyrighted by Blum-Novotest and are **not*
 
 ---
 
-## Workflow
-
-### Tool length - Z-Nano is primary
-- `toolLengthSetter` = **Z-Nano (P8915)** by default. Tools over 24 mm diameter always use the Z-Nano.
-- `[LASER LEN]` in the Fusion tool comment forces the Laser NT for that tool (B3, writes length).
+## Workflow details
 
 ### Proving the laser - compare-only mode
-With `laserLengthCheck = Compare only (B2)` (default), every Z-Nano length measurement is followed by
-`G65 P6008 B2.`. This runs Blum's **control mode**. It measures with the laser and compares against the
-table length. **It writes nothing** (O8603 skips all writes when |B| = 2).
-- If the difference exceeds `laserLengthCompareTolerance` (default 0.02 mm), Blum raises alarm 16
-  (OUT OF TOLERANCE).
+With **1. Length method = Z-Nano + laser compare**, every Z-Nano length measurement is followed by
+`G65 P6008 B2.`. This runs Blum's **control mode**: it measures with the laser and compares against
+the table length. **It writes nothing** (O8603 skips all writes when |B| = 2).
+- If the difference exceeds **Laser compare tolerance** (default 0.02 mm), Blum raises alarm 16
+  (OUT OF TOLERANCE). While the setters still differ by 10-20 µm you may want 0.03 mm.
 - On success: **#581 = tool number, #582 = laser length minus table length (mm)**.
-- Keep a log of #582 across your tool types. When it's consistently small, set `toolLengthSetter` to
-  Laser NT.
-- Also measure the calibration pin (T98) on both setters after warm-up. Any difference is a fixed
-  offset that affects every tool.
+- Measure the calibration pin (T98) on both setters after warm-up. Any difference is a fixed
+  offset that affects every tool; fix it in the setter calibration, not per tool.
 
 ### Wear / runout - O6009 with Fusion "Wear" compensation
-- Tag a tool `[LASER WEAR]` or list it in `laserWearTools` to check it at program start.
-- Add the Manual NC **Action** `laser_wear` to check it in-cycle.
+- Select tools with **3. Laser wear check at program start** and the per-operation checkbox,
+  the `[LASER WEAR]` tag, or a Manual NC `laser_wear` action for in-cycle checks.
 - O6009 puts the Fusion nominal diameter into cutter comp geometry `#13000+T` (Blum needs it for
   positioning and collision limits). It runs O8603 in check mode (B1, radius only), then sets the
   geometry back to **0**.
@@ -79,15 +133,22 @@ table length. **It writes nothing** (O8603 skips all writes when |B| = 2).
 
 Supported for laser wear: flat, bullnose, ball, lollipop, face, slot, dovetail, drill, reamer.
 Chamfer, thread, form, corner-rounding, tapered, taps, spot and centre drills, counterbores and
-boring bars are refused, because a single radius measurement is meaningless on them.
+boring bars are skipped (shown as `WEAR NO TYPE N/A` in the plan), because a single radius
+measurement is meaningless on them.
 
 ### In-cycle checks (Manual NC)
 Add a Manual NC **Action** before the operation:
 - `laser_wear` or `measure_wear`: O6009 on the tool of that operation.
-- `laser_length` or `measure_length`: length measurement with the selected setter.
+- `laser_length` or `measure_length`: length measurement using that tool's setter (rules above).
+  Refused at post time if the tool is on the Never-measure list.
 
 The post retracts, runs the check, restores modal state, and the next operation does a full approach
 move (XY, then `G43 Z H`).
+
+### Break detection
+Switched on per tool in Fusion (**Break control**). It uses the tool's length setter unless tagged
+`[LASER BREAK]` / `[ZNANO BREAK]`; tools over 24 mm always use the Z-Nano. A tool on the
+Never-measure list with Break control on is refused at post time.
 
 ---
 
@@ -158,22 +219,32 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 
 ---
 
-## Post properties (probing group)
+## Post properties (Post Process > Probing)
 
 | Property | Default | Notes |
 |---|---|---|
-| `toolLengthSetter` | **Z-Nano** | `laserNT` = O6008 B3 for all laser-capable tools |
-| `laserLengthCheck` | **Compare only (B2)** | Laser shadow check after each Z-Nano length |
-| `laserLengthCompareTolerance` | 0.02 mm | O6008 Q in B2 |
-| `maxDiameterWear` | 0.1 mm | Wear-comp guard limit and O6009 U |
-| `laserRunoutTolerance` | 0.025 mm | O6009 Q (per cutting edge) |
-| `toolBreakageTolerance` ("Tool breakage detect tolerance") | **0.04** | P8608 / P8915 break Q. Moved from the collapsed Preferences group to Probing in v3.7 |
-| `measureTools` / `measureToolsList` | off / all | Start-of-program length measurement (block-skippable) |
-| `laserWearTools` | empty | Start-of-program O6009 list |
-| `scanLollipopContour` | off | O8607 contour scan for lollipops |
+| 1. Length method | **Z-Nano + laser compare** | Z-Nano only / Z-Nano + laser compare / Laser only |
+| 2. Measure length at program start | **Checked operations** | Off / Checked operations / All tools |
+| 3. Laser wear check at program start | **Checked operations** | Off / Checked operations / All tools |
+| 4. Z-Nano only tools | empty | Tool numbers; same as `[ZNANO LEN]` |
+| 5. Laser tools | empty | Tool numbers; same as `[LASER LEN]` |
+| 6. Never measure tools | empty | Tool numbers; same as `[NO MEASURE]` |
+| Laser compare tolerance (mm) | 0.02 | O6008 B2 Q |
+| Max diameter wear for Wear comp (mm) | 0.1 | Wear-comp guard limit and O6009 U |
+| Laser runout tolerance (mm) | 0.025 | O6009 Q (per cutting edge) |
+| Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
+| Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
+| Confirm tool lengths | off | Stops if a table length is shorter than the CAM length |
 
-Tool comment tags: `[LASER LEN]`, `[ZNANO LEN]`/`[TOUCH LEN]`, `[LASER WEAR]`, `[LASER SCAN]`,
-`[LASER BREAK]`, `[ZNANO BREAK]`/`[TOUCH BREAK]`.
+Per operation (operation dialog > **Post Process** tab): **Measure tool length at start**,
+**Laser wear check at start**.
+
+Tool comment tags: `[LASER LEN]`, `[ZNANO LEN]`/`[TOUCH LEN]`, `[NO MEASURE]`, `[LASER WEAR]`,
+`[LASER SCAN]`, `[LASER BREAK]`, `[ZNANO BREAK]`/`[TOUCH BREAK]`.
+
+> The v3.6 properties *Optionally measure tools at start*, *Tool length setter*, *Tool length measure
+> list* and *Laser wear/runout tools* were replaced by the ones above. Existing NC programs need
+> these set once after switching to v3.7.
 
 ---
 
