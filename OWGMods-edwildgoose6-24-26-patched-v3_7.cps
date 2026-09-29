@@ -561,9 +561,9 @@ properties = {
     scope      : "post"
   },
   toolBreakageTolerance: {
-    title      : "Tool breakage tolerance",
-    description: "Specifies the tolerance for which tool break detection will raise an alarm.",
-    group      : "preferences",
+    title      : "Tool breakage detect tolerance",
+    description: "Tolerance at which tool break detection raises an alarm (Q of Blum Laser NT P8608 and Z-Nano P8915 B2). OWG v3_7: moved from Preferences to Probing.",
+    group      : "probing",
     type       : "spatial",
     value      : 0.04, // OWG v3_7: was 0.0025 (2.5 um) which trips false break alarms; Blum example O6018 uses Q0.04
     scope      : "post"

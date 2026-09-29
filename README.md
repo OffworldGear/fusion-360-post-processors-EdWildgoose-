@@ -167,7 +167,7 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 | `laserLengthCompareTolerance` | 0.02 mm | O6008 Q in B2 |
 | `maxDiameterWear` | 0.1 mm | Wear-comp guard limit and O6009 U |
 | `laserRunoutTolerance` | 0.025 mm | O6009 Q (per cutting edge) |
-| `toolBreakageTolerance` | **0.04** | P8608 / P8915 break Q |
+| `toolBreakageTolerance` ("Tool breakage detect tolerance") | **0.04** | P8608 / P8915 break Q. Moved from the collapsed Preferences group to Probing in v3.7 |
 | `measureTools` / `measureToolsList` | off / all | Start-of-program length measurement (block-skippable) |
 | `laserWearTools` | empty | Start-of-program O6009 list |
 | `scanLollipopContour` | off | O8607 contour scan for lollipops |
