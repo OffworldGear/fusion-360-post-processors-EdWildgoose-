@@ -81,7 +81,7 @@ and stay with the tool in your library.
 | `OWGMods-edwildgoose6-24-26-patched-v3_6.cps`, `v3_5.cps` | - | Previous versions, kept for reference. **Do not use** (see [Why v3.7](#why-v37)) |
 | `macros/O6008.NC` | C00 program memory | Laser NT length wrapper, Rev C. B3 = measure, B2 = compare only |
 | `macros/O6009.NC` | C00 program memory | Laser NT wear/runout wrapper, Rev C |
-| `macros/O9900.NC` | C00 program memory | Emergency cleanup: zero cutter comp geometry T1-T99, clear flag #580 |
+| `macros/O6007.NC` | C00 program memory | Emergency cleanup (was O9900): zero cutter comp geometry T1-T99, clear flag #580 |
 | `brother speedio.cps` | - | Upstream post, for diffing |
 
 All `.NC` files use CRLF line endings, lines of 80 characters or less, and no nested parentheses in comments.
@@ -93,7 +93,8 @@ Blum's own macros (O86xx, O89xx) are copyrighted by Blum-Novotest and are **not*
 ## Installation
 
 1. **Back up the controller first** (Data Bank > save all programs and TOLSM1).
-2. Load `O6008.NC`, `O6009.NC`, `O9900.NC` into program memory (overwrite the Rev B files).
+2. Load `O6007.NC`, `O6008.NC`, `O6009.NC` into program memory (overwrite the Rev B files).
+   Delete any old `O9900` from the PC side - the C00 cannot use programs 9000-9999.
 3. Edit the Blum start-of-cycle program **O8670** on the controller. Change line 15 from
    `G90G0G53A-30.` to `(G90G0G53A-30.)(OWG A-AXIS MOVE REMOVED)`. Nothing else changes.
    This file runs at the start of **every** Blum laser cycle, including break detection. The rotary
@@ -178,7 +179,7 @@ Blum's own alarms are 9001-9024 (`#3000=1..24`). The OWG alarms use 9101-9122 so
 C00 alarm messages are limited to 20 characters (manual 6.2.6.4).
 
 ### Recovery after an alarm during O6008/O6009
-Blum raises its own alarm inside O8603, so the wrapper cleanup cannot run. Either run **O9900**, or
+Blum raises its own alarm inside O8603, so the wrapper cleanup cannot run. Either run **O6007**, or
 just restart the program; the start guard cleans up (alarm 9122 once, then it runs).
 
 ---
@@ -209,7 +210,9 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
    - With B.SKP ON the start-of-program G90/G94 could be suppressed.
 
 ## C00 facts used (NC Programming Manual eCOM3NCPR 2020/02/26)
-- Program files: the program number comes from the **file name** (`O9900.NC`). No `O9900` line and
+- Program numbers **9000-9999 cannot be used** (data manual, program edit Note 1; 9900-9999 are
+  schedule programs). User programs must be 1-8999.
+- Program files: the program number comes from the **file name** (`O6007.NC`). No `O6007` line and
   no `%` inside the file - address O is reserved for comments (manual 1.3). Start with a comment line,
   like every program in the controller backup. Max 128 characters per block.
 - No G20/G21. Units come from `<Machine unit system>`; read with `#4006` (20 inch / 21 metric).
@@ -264,7 +267,7 @@ Tool comment tags: `[LASER LEN]`, `[ZNANO LEN]`/`[TOUCH LEN]`, `[NO MEASURE]`, `
 Do these in order, in **memory mode** (G65 cannot run from MDI), single block, rapid override 25%,
 hand on feed hold.
 
-1. **O9900** - confirm all cutter comp geometry is 0 and #580 = 0.
+1. **O6007** - confirm all cutter comp geometry is 0 and #580 = 0.
 2. **Start guards**: post any short job and run only up to the end of the `(OWG SAFETY GUARDS)` block.
    Confirm it passes the unit check; set #580 = 5 by hand and confirm alarm 9122 appears and #13005/#580 are cleared.
 3. **O6008 compare, standalone**: a short program with a known flat end mill that the Z-Nano already
