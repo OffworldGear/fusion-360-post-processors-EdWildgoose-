@@ -248,7 +248,8 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 | 10. Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
 | 11. Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
 | 12. Laser measuring RPM | **3000** | Speed for every laser measurement - the calibration speed (O6011 S3000), never the tool's cutting RPM. Below 3000 refused (NT minimum); other values warn |
-| Confirm tool lengths | off | Stops if a table length is shorter than the CAM length |
+| Confirm tool lengths | off | Stops with a message (Cycle Start continues) if length + length wear on the machine is shorter than the Fusion length (body + holder) by more than the tolerance. Shortfall in **#583**, tool in **#584**; message `T17 SHORT VAR 583` |
+| Confirm tool lengths tolerance (mm) | 1.0 | Allowed shortfall. A shorter tool than modeled brings the holder that much closer to the part than Fusion's collision check assumed |
 
 Per operation (operation dialog > **Post Process** tab): **Measure tool length at start**,
 **Laser wear check at start**.

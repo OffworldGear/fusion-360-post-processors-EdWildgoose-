@@ -744,10 +744,19 @@ properties = {
   },
   confirmToolLengths: {
     title      : "Confirm tool lengths",
-    description: "Ensure that the actual tool lengths are equal or longer to that specified in CAM.",
+    description: "Stop with a message (#3006, Cycle Start continues) if a tool's length on the machine (#11000+T + #10000+T) is shorter than the Fusion length (body + holder) by more than the tolerance below. The shortfall is stored in #583 and the tool number in #584.",
     group      : "probing",
     type       : "boolean",
     value      : false,
+    scope      : "post"
+  },
+  // OWG v3_7: ID sorts directly after confirmToolLengths in the Fusion dialog
+  confirmToolLengthsTolerance: {
+    title      : "Confirm tool lengths tolerance (mm)",
+    description: "How much shorter than the Fusion model a tool may be before 'Confirm tool lengths' stops the program. A shorter tool brings the holder closer to the part than Fusion's collision check assumed.",
+    group      : "probing",
+    type       : "number",
+    value      : 1.0,
     scope      : "post"
   },
   singleResultsFile: {
@@ -2962,8 +2971,17 @@ function writeMeasureTools() {
   writeln("");
 
   // optionally confirm tool lengths
+  // OWG v3_7: compares length + length wear (what G43 actually uses) against the Fusion
+  // length minus a tolerance; stores the shortfall in #583 and the tool in #584 before
+  // the #3006 stop (#3006 text is fixed at post time, so the value cannot be in it).
   if (getProperty("confirmToolLengths")) {
     var toolLenBase = 11000;
+    var toolWearBase = 10000;
+    var lengthTolerance = getProperty("confirmToolLengthsTolerance");
+    if (!(lengthTolerance >= 0)) {
+      error(localize("OWG: 'Confirm tool lengths tolerance' must be zero or greater."));
+      lengthTolerance = 0;
+    }
     var tools = getToolTable();
     optionalSection = true;
     if (tools.getNumberOfTools() > 0) {
@@ -2974,14 +2992,18 @@ function writeMeasureTools() {
           continue;
         }
 
-        // Compare tool table len with CAM len and stop if shorter
-        var camLen = xyzFormat.format(tool.bodyLength + tool.holderLength);
-        var tooltableLen = "#" + (toolLenBase + tool.number);
+        // Compare tool table len with CAM len and stop if shorter by more than the tolerance
+        var camLength = tool.bodyLength + tool.holderLength;
+        var minLength = camLength - lengthTolerance;
+        var machineLen = "[#" + (toolLenBase + tool.number) + " + #" + (toolWearBase + tool.number) + "]";
         var seq = sequenceNumber;
         sequenceNumber += getProperty("sequenceNumberIncrement");
-        writeComment("Checking lengths of tool: " + tool.number);
-        writeBlock("N" + seq + " IF [" + tooltableLen + " GE " + camLen + "] GOTO " + sequenceNumber);
-        writeBlock("#3006=(TOOL " + tool.number + " TOO SHORT)")
+        writeComment("Checking length of T" + tool.number + ": CAM " + xyzFormat.format(camLength) +
+          " MIN " + xyzFormat.format(minLength));
+        writeBlock("N" + seq + " IF [" + machineLen + " GE " + macroNum(minLength) + "] GOTO " + sequenceNumber);
+        writeBlock("#583 = " + macroNum(camLength) + " - " + machineLen, formatComment("SHORTFALL MM"));
+        writeBlock("#584 = " + tool.number + ".", formatComment("TOOL"));
+        writeBlock("#3006=(T" + tool.number + " SHORT VAR 583)");
       }
       writeBlock("N" + sequenceNumber)
       sequenceNumber += getProperty("sequenceNumberIncrement");
