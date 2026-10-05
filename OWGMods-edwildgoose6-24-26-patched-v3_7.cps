@@ -715,6 +715,14 @@ properties = {
     value      : false,
     scope      : "post"
   },
+  b6LaserMeasureRpm: {
+    title      : "12. Laser measuring RPM",
+    description: "Spindle speed for every Laser NT measurement (length, compare, wear, scan). Use the speed the laser was calibrated at (O6011: 3000). Blum NT minimum is 3000 (O8671 #136). The tool's cutting RPM is NOT used.",
+    group      : "probing",
+    type       : "integer",
+    value      : 3000,
+    scope      : "post"
+  },
   // OWG v3_7: per-operation checkboxes (operation dialog > Post Process tab)
   opMeasureLength: {
     title      : "Measure tool length at start",
@@ -2307,6 +2315,25 @@ function isToolType(t, key) {
   return (OWG_TYPES[key] !== -1) && (t.type == OWG_TYPES[key]);
 }
 
+/**
+ * OWG v3_7: Laser NT measuring speed. v3_6 used max(3000, tool cutting RPM), which sent
+ * e.g. a 6 mm end mill into the laser at 12000 RPM. Dynamic laser readings must be taken
+ * at the calibration speed (O6011 calibrates at S3000); NT minimum is 3000 (O8671 #136).
+ */
+var laserRpmWarned = false;
+function getLaserMeasureRpm() {
+  var rpm = parseInt(getProperty("b6LaserMeasureRpm", 3000), 10);
+  if (isNaN(rpm) || rpm < 3000) {
+    error(localize("OWG: '12. Laser measuring RPM' must be at least 3000 (Blum Laser NT minimum)."));
+    return 3000;
+  }
+  if (rpm != 3000 && !laserRpmWarned) {
+    warning(localize("OWG: Laser measuring RPM is " + rpm + ". The laser was calibrated at 3000 RPM (O6011); measurements at other speeds include speed-dependent error."));
+    laserRpmWarned = true;
+  }
+  return rpm;
+}
+
 /** Formats a number for a macro argument/expression, always with a decimal point. */
 function macroNum(value) {
   var s = xyzFormat.format(value);
@@ -2663,7 +2690,7 @@ function writeLaserWearBlock(tool, preMeasure) {
 
   var geom = calculateLaserMeasurementGeometry(tool, "wear");
   var flutes = (tool.numberOfFlutes && tool.numberOfFlutes > 0) ? tool.numberOfFlutes : (geom.isCentric ? 2 : 4);
-  var rpm = Math.max(3000, Math.round(tool.spindleRPM || 3000));
+  var rpm = getLaserMeasureRpm(); // OWG v3_7: fixed calibration speed, not the cutting RPM
   // OWG v3_7: no silent fallback to the break tolerance (a 0 here used to become 0.0025 mm)
   var qVal = getProperty("b3LaserRunoutTolerance");
   var uVal = getProperty("b2MaxDiameterWear");
@@ -2798,7 +2825,7 @@ function writeToolMeasureBlock(tool, preMeasure) {
 function writeLaserLengthBlock(tool, mode) {
   var geom = calculateLaserMeasurementGeometry(tool, "length");
   var flutes = (tool.numberOfFlutes && tool.numberOfFlutes > 0) ? tool.numberOfFlutes : (geom.isCentric ? 2 : 4);
-  var rpm = Math.max(3000, Math.round(tool.spindleRPM || 3000));
+  var rpm = getLaserMeasureRpm(); // OWG v3_7: fixed calibration speed, not the cutting RPM
   var qVal = (mode == 2) ? getProperty("b1LaserCompareTolerance") : 0.025;
   if (!(qVal > 0)) {
     error(localize("OWG: 'Laser compare tolerance' must be greater than zero."));

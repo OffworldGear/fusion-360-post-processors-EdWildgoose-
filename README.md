@@ -119,6 +119,9 @@ the table length. **It writes nothing** (O8603 skips all writes when |B| = 2).
 - If the difference exceeds **7. Laser compare tolerance** (default 0.02 mm), Blum raises alarm 16
   (OUT OF TOLERANCE). While the setters still differ by 10-20 µm you may want 0.03 mm.
 - On success: **#581 = tool number, #582 = laser length minus table length (mm)**.
+- All laser measurements run at **12. Laser measuring RPM** (3000 = the calibration speed). During the
+  O6009 edge check Blum itself slows the spindle further (about 3750 / flutes RPM) so each flute's
+  pulse can be checked - that is expected.
 - Measure the calibration pin (T98) on both setters after warm-up. Any difference is a fixed
   offset that affects every tool; fix it in the setter calibration, not per tool.
 
@@ -244,6 +247,7 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 | 9. Uneven edge tolerance - runout or chip (mm) | 0.025 | Each edge vs the largest edge, ignores nominal. Fails on a chip or runout, can't tell which (Blum alarm 15). Pass/fail, O6009 Q |
 | 10. Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
 | 11. Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
+| 12. Laser measuring RPM | **3000** | Speed for every laser measurement - the calibration speed (O6011 S3000), never the tool's cutting RPM. Below 3000 refused (NT minimum); other values warn |
 | Confirm tool lengths | off | Stops if a table length is shorter than the CAM length |
 
 Per operation (operation dialog > **Post Process** tab): **Measure tool length at start**,
