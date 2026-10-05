@@ -230,8 +230,8 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 | 5. Laser tools | empty | Tool numbers; same as `[LASER LEN]` |
 | 6. Never measure tools | empty | Tool numbers; same as `[NO MEASURE]` |
 | 7. Laser compare tolerance (mm) | 0.02 | O6008 B2 Q |
-| 8. Max diameter wear for Wear comp (mm) | 0.1 | Wear-comp guard limit and O6009 U |
-| 9. Laser runout tolerance (mm) | 0.025 | O6009 Q (per cutting edge) |
+| 8. Max diameter wear - even wear (mm) | 0.1 | Measured diameter vs Fusion nominal; written to #12000+T and used by Wear comp. O6009 U, wear-comp guard 9121 |
+| 9. Edge runout / chipped edge tolerance (mm) | 0.025 | Each edge vs the largest edge; catches a chipped flute or runout (Blum alarm 15). O6009 Q, writes nothing |
 | 10. Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
 | 11. Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
 | Confirm tool lengths | off | Stops if a table length is shorter than the CAM length |

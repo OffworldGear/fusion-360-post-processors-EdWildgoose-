@@ -684,16 +684,16 @@ properties = {
     scope      : "post"
   },
   b2MaxDiameterWear: {
-    title      : "8. Max diameter wear for Wear comp (mm)",
-    description: "Before any operation using Fusion 'Wear' compensation the post emits a check that alarms (9121) if |#[12000+D]| exceeds this value, and zeroes the cutter comp geometry #[13000+D]. Also passed to O6009 as U.",
+    title      : "8. Max diameter wear - even wear (mm)",
+    description: "How far the measured DIAMETER may differ from the Fusion nominal (even wear of all flutes). O6009 writes the difference to #12000+T, which Wear comp uses to move the cutter. Over this limit: alarm 9104 in O6009, and alarm 9121 before any Wear-comp operation. Passed to O6009 as U.",
     group      : "probing",
     type       : "number",
     value      : 0.1,
     scope      : "post"
   },
   b3LaserRunoutTolerance: {
-    title      : "9. Laser runout tolerance (mm)",
-    description: "Maximum allowable runout per cutting edge for the O6009 laser wear check (Q, mm).",
+    title      : "9. Edge runout / chipped edge tolerance (mm)",
+    description: "Per cutting edge: every edge must reach within this distance of the largest edge, checked by spinning the tool slowly at the laser. Catches a chipped flute or excessive runout (Blum alarm 15 CUTTING EDGE BROKEN). Writes nothing. Passed to O6009 as Q.",
     group      : "probing",
     type       : "number", // laser cycles are metric-only, so this is always mm
     value      : 0.025,
