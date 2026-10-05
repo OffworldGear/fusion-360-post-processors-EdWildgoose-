@@ -115,7 +115,7 @@ Blum's own macros (O86xx, O89xx) are copyrighted by Blum-Novotest and are **not*
 With **1. Length method = Z-Nano + laser compare**, every Z-Nano length measurement is followed by
 `G65 P6008 B2.`. This runs Blum's **control mode**: it measures with the laser and compares against
 the table length. **It writes nothing** (O8603 skips all writes when |B| = 2).
-- If the difference exceeds **Laser compare tolerance** (default 0.02 mm), Blum raises alarm 16
+- If the difference exceeds **7. Laser compare tolerance** (default 0.02 mm), Blum raises alarm 16
   (OUT OF TOLERANCE). While the setters still differ by 10-20 µm you may want 0.03 mm.
 - On success: **#581 = tool number, #582 = laser length minus table length (mm)**.
 - Measure the calibration pin (T98) on both setters after warm-up. Any difference is a fixed
@@ -229,11 +229,11 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 | 4. Z-Nano only tools | empty | Tool numbers; same as `[ZNANO LEN]` |
 | 5. Laser tools | empty | Tool numbers; same as `[LASER LEN]` |
 | 6. Never measure tools | empty | Tool numbers; same as `[NO MEASURE]` |
-| Laser compare tolerance (mm) | 0.02 | O6008 B2 Q |
-| Max diameter wear for Wear comp (mm) | 0.1 | Wear-comp guard limit and O6009 U |
-| Laser runout tolerance (mm) | 0.025 | O6009 Q (per cutting edge) |
-| Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
-| Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
+| 7. Laser compare tolerance (mm) | 0.02 | O6008 B2 Q |
+| 8. Max diameter wear for Wear comp (mm) | 0.1 | Wear-comp guard limit and O6009 U |
+| 9. Laser runout tolerance (mm) | 0.025 | O6009 Q (per cutting edge) |
+| 10. Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
+| 11. Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
 | Confirm tool lengths | off | Stops if a table length is shorter than the CAM length |
 
 Per operation (operation dialog > **Post Process** tab): **Measure tool length at start**,
@@ -242,9 +242,13 @@ Per operation (operation dialog > **Post Process** tab): **Measure tool length a
 Tool comment tags: `[LASER LEN]`, `[ZNANO LEN]`/`[TOUCH LEN]`, `[NO MEASURE]`, `[LASER WEAR]`,
 `[LASER SCAN]`, `[LASER BREAK]`, `[ZNANO BREAK]`/`[TOUCH BREAK]`.
 
+> Fusion lists properties by their internal ID, so the IDs are prefixed (`a1LengthMethod` ...
+> `b5ScanLollipopContour`) to keep 1-11 in order. Leaving lists 4 and 5 empty is normal: every
+> tool then follows **1. Length method**.
+>
 > The v3.6 properties *Optionally measure tools at start*, *Tool length setter*, *Tool length measure
-> list* and *Laser wear/runout tools* were replaced by the ones above. Existing NC programs need
-> these set once after switching to v3.7.
+> list* and *Laser wear/runout tools* were replaced by the ones above, and properties 1-11 were
+> renamed on 2026-10-05. Existing NC programs need these set once after updating.
 
 ---
 

@@ -605,13 +605,14 @@ properties = {
     scope      : "post"
   },
   // ---------------------------------------------------------------------------
-  // OWG v3_7 TOOL MEASURING (Blum Z-Nano + Laser NT). Titles are numbered so they read
-  // top-down in the Fusion dialog. Per-tool priority for length:
+  // OWG v3_7 TOOL MEASURING (Blum Z-Nano + Laser NT). Fusion lists a group's properties
+  // sorted by property ID, so the IDs are prefixed a1..a6 / b1..b5 to keep the numbered
+  // titles in order at the top of the Probing group. Per-tool priority for length:
   //   Never measure list / [NO MEASURE]  >  Z-Nano list / [ZNANO LEN]  >
   //   Laser list / [LASER LEN]  >  Length method.
   // Tools the laser cannot handle (> 24 mm, not metric) always fall back to the Z-Nano.
   // ---------------------------------------------------------------------------
-  lengthMethod: {
+  a1LengthMethod: {
     title      : "1. Length method (default for all tools)",
     description: "How tool length is measured unless a tool is listed/tagged otherwise. 'Z-Nano + laser compare' sets the length with the Z-Nano, then re-measures with the Laser NT in Blum compare-only mode (O6008 B2, writes nothing, alarms if the difference exceeds the compare tolerance, difference stored in #582). Use it to prove the laser before switching to 'Laser only'.",
     group      : "probing",
@@ -624,7 +625,7 @@ properties = {
     value      : "znanoCompare",
     scope      : "post"
   },
-  startLengthMeasure: {
+  a2StartLengthMeasure: {
     title      : "2. Measure length at program start",
     description: "Which tools get their length measured at the start of the program (block-skippable with B.SKP). 'Checked operations' = tools used by an operation whose Post Process tab has 'Measure tool length at start' ticked. The Never-measure list always wins.",
     group      : "probing",
@@ -637,7 +638,7 @@ properties = {
     value      : "checked",
     scope      : "post"
   },
-  startWearCheck: {
+  a3StartWearCheck: {
     title      : "3. Laser wear check at program start",
     description: "Which tools get an O6009 laser wear/runout check at program start. 'Checked operations' = tools used by an operation with 'Laser wear check at start' ticked, or tagged [LASER WEAR]. Only supported tool types <= 24 mm are checked. Needs a length already in the tool table.",
     group      : "probing",
@@ -650,7 +651,7 @@ properties = {
     value      : "checked",
     scope      : "post"
   },
-  lengthZnanoTools: {
+  a4ZnanoTools: {
     title      : "4. Z-Nano only tools",
     description: "Tool numbers always measured with the Z-Nano and never with the laser (e.g. '3, 12' or '20-25'). Same as the [ZNANO LEN] tag.",
     group      : "probing",
@@ -658,7 +659,7 @@ properties = {
     value      : "",
     scope      : "post"
   },
-  lengthLaserTools: {
+  a5LaserTools: {
     title      : "5. Laser tools",
     description: "Tool numbers measured with the Laser NT (O6008 B3, writes the length). Same as the [LASER LEN] tag. Tools the laser cannot handle fall back to the Z-Nano.",
     group      : "probing",
@@ -666,7 +667,7 @@ properties = {
     value      : "",
     scope      : "post"
   },
-  excludeTools: {
+  a6NeverMeasureTools: {
     title      : "6. Never measure tools",
     description: "Tool numbers that are never measured (length or wear), e.g. tools too big for either setter. Same as the [NO MEASURE] tag. An in-cycle Manual NC measurement of one of these tools is refused at post time.",
     group      : "probing",
@@ -674,40 +675,40 @@ properties = {
     value      : "",
     scope      : "post"
   },
-  laserLengthCompareTolerance: {
-    title      : "Laser compare tolerance (mm)",
+  b1LaserCompareTolerance: {
+    title      : "7. Laser compare tolerance (mm)",
     description: "Maximum allowed difference between the Z-Nano length and the Laser NT length before Blum alarms (O6008 B2 Q, mm).",
     group      : "probing",
     type       : "number",
     value      : 0.02,
     scope      : "post"
   },
-  maxDiameterWear: {
-    title      : "Max diameter wear for Wear comp (mm)",
+  b2MaxDiameterWear: {
+    title      : "8. Max diameter wear for Wear comp (mm)",
     description: "Before any operation using Fusion 'Wear' compensation the post emits a check that alarms (9121) if |#[12000+D]| exceeds this value, and zeroes the cutter comp geometry #[13000+D]. Also passed to O6009 as U.",
     group      : "probing",
     type       : "number",
     value      : 0.1,
     scope      : "post"
   },
-  laserRunoutTolerance: {
-    title      : "Laser runout tolerance (mm)",
+  b3LaserRunoutTolerance: {
+    title      : "9. Laser runout tolerance (mm)",
     description: "Maximum allowable runout per cutting edge for the O6009 laser wear check (Q, mm).",
     group      : "probing",
     type       : "number", // laser cycles are metric-only, so this is always mm
     value      : 0.025,
     scope      : "post"
   },
-  toolBreakageTolerance: {
-    title      : "Tool breakage detect tolerance",
+  b4ToolBreakageTolerance: {
+    title      : "10. Tool breakage detect tolerance",
     description: "Tolerance at which tool break detection raises an alarm (Q of Blum Laser NT P8608 and Z-Nano P8915 B2). Break detection itself is switched on per tool in Fusion (Break control).",
     group      : "probing",
     type       : "spatial",
     value      : 0.04, // OWG v3_7: was 0.0025 (2.5 um) which trips false break alarms; Blum example O6018 uses Q0.04
     scope      : "post"
   },
-  scanLollipopContour: {
-    title      : "Scan lollipop contour with laser",
+  b5ScanLollipopContour: {
+    title      : "11. Scan lollipop contour with laser",
     description: "When true, lollipop cutters use Blum O8607 spherical contour scanning instead of single-point equator wear measurement.",
     group      : "probing",
     type       : "boolean",
@@ -2143,7 +2144,7 @@ function toolHasTag(tool, tags) {
 
 /** OWG v3_7: tool is on the Never-measure list or tagged [NO MEASURE]. */
 function isToolExcluded(tool) {
-  return isToolInList(getProperty("excludeTools"), tool.number) || toolHasTag(tool, ["[NO MEASURE]"]);
+  return isToolInList(getProperty("a6NeverMeasureTools"), tool.number) || toolHasTag(tool, ["[NO MEASURE]"]);
 }
 
 /**
@@ -2160,8 +2161,8 @@ function getLengthPlan(tool) {
   if (isToolExcluded(tool)) {
     return {setter:"none", compare:false, why:"NEVER MEASURE"};
   }
-  var inZnano = isToolInList(getProperty("lengthZnanoTools"), tool.number) || toolHasTag(tool, ["[ZNANO LEN]", "[TOUCH LEN]"]);
-  var inLaser = isToolInList(getProperty("lengthLaserTools"), tool.number) || toolHasTag(tool, ["[LASER LEN]"]);
+  var inZnano = isToolInList(getProperty("a4ZnanoTools"), tool.number) || toolHasTag(tool, ["[ZNANO LEN]", "[TOUCH LEN]"]);
+  var inLaser = isToolInList(getProperty("a5LaserTools"), tool.number) || toolHasTag(tool, ["[LASER LEN]"]);
   if (inZnano && inLaser) {
     error(localize("OWG: Tool " + tool.number + " is in both the Z-Nano and the Laser tool lists/tags. Pick one."));
     return {setter:"none", compare:false, why:"CONFLICT"};
@@ -2169,7 +2170,7 @@ function getLengthPlan(tool) {
   if (inZnano) {
     return {setter:"znano", compare:false, why:"Z-NANO LIST"};
   }
-  var method = getProperty("lengthMethod");
+  var method = getProperty("a1LengthMethod");
   if (inLaser || method == "laser") {
     if (isLaserCapableTool(tool)) {
       return {setter:"laser", compare:false, why:inLaser ? "LASER LIST" : "METHOD"};
@@ -2437,7 +2438,7 @@ function writeCutterCompGuards() {
     error(localize("OWG: Tool " + tool.number + " uses Wear compensation with D" + d + ". Blum writes wear to row T" + tool.number + " - set the diameter offset equal to the tool number."));
     return;
   }
-  var limit = getProperty("maxDiameterWear");
+  var limit = getProperty("b2MaxDiameterWear");
   if (!(limit > 0)) {
     error(localize("OWG: 'Max diameter wear for Wear comp' must be greater than zero."));
     return;
@@ -2664,15 +2665,15 @@ function writeLaserWearBlock(tool, preMeasure) {
   var flutes = (tool.numberOfFlutes && tool.numberOfFlutes > 0) ? tool.numberOfFlutes : (geom.isCentric ? 2 : 4);
   var rpm = Math.max(3000, Math.round(tool.spindleRPM || 3000));
   // OWG v3_7: no silent fallback to the break tolerance (a 0 here used to become 0.0025 mm)
-  var qVal = getProperty("laserRunoutTolerance");
-  var uVal = getProperty("maxDiameterWear");
+  var qVal = getProperty("b3LaserRunoutTolerance");
+  var uVal = getProperty("b2MaxDiameterWear");
   if (!(qVal > 0) || !(uVal > 0)) {
     error(localize("OWG: 'Laser NT max runout tolerance' and 'Max diameter wear' must both be greater than zero."));
     return;
   }
 
   // Check if spherical contour scan is requested for lollipop tool
-  var wantScan = geom.isLollipop && (getProperty("scanLollipopContour") || (tool.comment && tool.comment.toUpperCase().indexOf("[LASER SCAN]") !== -1));
+  var wantScan = geom.isLollipop && (getProperty("b5ScanLollipopContour") || (tool.comment && tool.comment.toUpperCase().indexOf("[LASER SCAN]") !== -1));
 
   if (wantScan) {
     writeComment("BLUM LASER NT SPHERICAL CONTOUR SCAN (O8607)");
@@ -2798,7 +2799,7 @@ function writeLaserLengthBlock(tool, mode) {
   var geom = calculateLaserMeasurementGeometry(tool, "length");
   var flutes = (tool.numberOfFlutes && tool.numberOfFlutes > 0) ? tool.numberOfFlutes : (geom.isCentric ? 2 : 4);
   var rpm = Math.max(3000, Math.round(tool.spindleRPM || 3000));
-  var qVal = (mode == 2) ? getProperty("laserLengthCompareTolerance") : 0.025;
+  var qVal = (mode == 2) ? getProperty("b1LaserCompareTolerance") : 0.025;
   if (!(qVal > 0)) {
     error(localize("OWG: 'Laser compare tolerance' must be greater than zero."));
     return;
@@ -2839,8 +2840,8 @@ function writeMeasureTools() {
   setProperty("showSequenceNumbers", "false");
 
   var tools = getToolTable();
-  var startLength = getProperty("startLengthMeasure");
-  var startWear = getProperty("startWearCheck");
+  var startLength = getProperty("a2StartLengthMeasure");
+  var startWear = getProperty("a3StartWearCheck");
 
   // OWG v3_7: tools ticked in any operation's Post Process tab
   var checkedLength = {};
@@ -2883,7 +2884,7 @@ function writeMeasureTools() {
   }
 
   writeln("");
-  writeComment("MEASUREMENT PLAN - LENGTH METHOD " + String(getProperty("lengthMethod")).toUpperCase());
+  writeComment("MEASUREMENT PLAN - LENGTH METHOD " + String(getProperty("a1LengthMethod")).toUpperCase());
   writeComment("START LENGTH " + String(startLength).toUpperCase() + " / START WEAR " + String(startWear).toUpperCase());
   for (var p = 0; p < planLines.length; ++p) {
     writeComment(planLines[p]);
@@ -3351,7 +3352,7 @@ function onCommand(command) {
           gFormat.format(65),
           "P" + 8858,
           "B1", // B1=length only, B2=diam only, B3=length and diameter
-          "H" + xyzFormat.format(getProperty("toolBreakageTolerance")),
+          "H" + xyzFormat.format(getProperty("b4ToolBreakageTolerance")),
           "T" + toolFormat.format(tool.number)
         );
       } else {
@@ -3359,7 +3360,7 @@ function onCommand(command) {
           gFormat.format(65),
           "P" + 8915,
           "B2",
-          "Q" + xyzFormat.format(getProperty("toolBreakageTolerance")),
+          "Q" + xyzFormat.format(getProperty("b4ToolBreakageTolerance")),
           // Offset (larger) face/slot-mills by tool radius
           conditional(offsetTool, "R" + xyzFormat.format(tool.diameter / 2)),
           // Measure all flutes
@@ -3378,7 +3379,7 @@ function onCommand(command) {
           gFormat.format(65),
           "P" + 8858,
           "B1", // B1=length only, B2=diam only, B3=length and diameter
-          "H" + xyzFormat.format(getProperty("toolBreakageTolerance")),
+          "H" + xyzFormat.format(getProperty("b4ToolBreakageTolerance")),
           "T" + toolFormat.format(tool.number),
           formatComment("RENISHAW BREAK CHECK")
         );
@@ -3392,7 +3393,7 @@ function onCommand(command) {
           "H" + macroNum(tool.number),
           "X0.",
           "M1.",
-          "Q" + macroNum(getProperty("toolBreakageTolerance")),
+          "Q" + macroNum(getProperty("b4ToolBreakageTolerance")),
           "W0.",
           formatComment("LASER BREAK CHECK")
         );
@@ -3404,7 +3405,7 @@ function onCommand(command) {
           gFormat.format(65),
           "P8915",
           "B2.",
-          "Q" + macroNum(getProperty("toolBreakageTolerance")),
+          "Q" + macroNum(getProperty("b4ToolBreakageTolerance")),
           conditional(offsetTool, "R" + xyzFormat.format(tool.diameter / 2)),
           conditional(tool.type == TOOL_MILLING_FACE && measureAllFlutes && offsetTool, "D" + macroNum(tool.numberOfFlutes)),
           formatComment("Z-NANO BREAK CHECK")
