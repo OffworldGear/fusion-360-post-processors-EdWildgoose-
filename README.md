@@ -209,6 +209,9 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
    - With B.SKP ON the start-of-program G90/G94 could be suppressed.
 
 ## C00 facts used (NC Programming Manual eCOM3NCPR 2020/02/26)
+- Program files: the program number comes from the **file name** (`O9900.NC`). No `O9900` line and
+  no `%` inside the file - address O is reserved for comments (manual 1.3). Start with a comment line,
+  like every program in the controller backup. Max 128 characters per block.
 - No G20/G21. Units come from `<Machine unit system>`; read with `#4006` (20 inch / 21 metric).
 - Only `IF [cond] GOTO n` (no THEN). `WHILE [] DOm .. ENDm`, up to 4 deep.
 - G65 nesting is limited to **4 levels** (8 including M98). O6009 → O8603 → O8630 → O8670 uses all 4,
