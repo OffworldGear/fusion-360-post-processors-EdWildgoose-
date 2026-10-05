@@ -127,7 +127,11 @@ the table length. **It writes nothing** (O8603 skips all writes when |B| = 2).
 - O6009 puts the Fusion nominal diameter into cutter comp geometry `#13000+T` (Blum needs it for
   positioning and collision limits). It runs O8603 in check mode (B1, radius only), then sets the
   geometry back to **0**.
-- Blum writes the measured **diameter** wear to `#12000+T` (negative = tool smaller). With Fusion
+- Blum writes the measured **diameter** change to `#12000+T`. The laser sees the spinning envelope
+  of the largest edge, so this one number mixes wear (-), runout (+) and the tool's size tolerance
+  against the Fusion nominal; they can partly cancel. It is the right value for Wear comp because the
+  largest edge sets the wall. Unevenness between edges (runout or a chip) is caught separately by the
+  pass/fail edge check (property 9). With Fusion
   **Wear** compensation (`G41/G42 D`, geometry 0) that value moves the cutter directly.
 - The tool **length must already be in the table**. O6009 alarms 9107 otherwise.
 
@@ -230,8 +234,8 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 | 5. Laser tools | empty | Tool numbers; same as `[LASER LEN]` |
 | 6. Never measure tools | empty | Tool numbers; same as `[NO MEASURE]` |
 | 7. Laser compare tolerance (mm) | 0.02 | O6008 B2 Q |
-| 8. Max diameter wear - even wear (mm) | 0.1 | Measured diameter vs Fusion nominal; written to #12000+T and used by Wear comp. O6009 U, wear-comp guard 9121 |
-| 9. Edge runout / chipped edge tolerance (mm) | 0.025 | Each edge vs the largest edge; catches a chipped flute or runout (Blum alarm 15). O6009 Q, writes nothing |
+| 8. Max diameter change - wear + runout (mm) | 0.1 | Spinning envelope vs Fusion nominal: runout (+), wear (-) and size tolerance in one number. Written to #12000+T and used by Wear comp. O6009 U, guard 9121 |
+| 9. Uneven edge tolerance - runout or chip (mm) | 0.025 | Each edge vs the largest edge, ignores nominal. Fails on a chip or runout, can't tell which (Blum alarm 15). Pass/fail, O6009 Q |
 | 10. Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
 | 11. Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
 | Confirm tool lengths | off | Stops if a table length is shorter than the CAM length |
