@@ -232,6 +232,12 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 
 ---
 
+## Blum touch-probe notes
+- **Partial circle (hole/boss) angles**: Blum O8711 alarms 101.21 *INVALID CALL PARAMETERS* if any
+  angle is outside **0-359.0 deg** or two angles are less than 10 deg apart by plain subtraction (no
+  wrap-around). The post moves an angle above 359.0 to 0 or 359 (at most 0.5 deg, with a warning) and
+  refuses angle sets Blum would reject. Before this fix, Fusion's -0.21 deg was posted as 359.79 deg.
+
 ## Post properties (Post Process > Probing)
 
 | Property | Default | Notes |

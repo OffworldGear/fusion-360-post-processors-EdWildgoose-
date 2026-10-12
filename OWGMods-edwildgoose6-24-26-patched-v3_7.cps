@@ -1010,6 +1010,42 @@ function ensurePositiveAngle(angle) {
   }
 }
 
+/**
+ * OWG v3_7: Partial-circle probe angles for Blum O8700 -> O8711 (H, U, V).
+ * O8711 alarms 101.21 "INVALID CALL PARAMETERS" when any angle is outside 0..359.0
+ * (IF[ABS[a-179.5]GT179.5]) or any two angles differ by less than 10 degrees by plain
+ * subtraction (no wrap-around). ensurePositiveAngle() turned -0.2 deg into 359.8 deg,
+ * which O8711 rejects. Angles above 359.0 are moved to 0 (>= 359.5) or 359.0, a shift of
+ * at most 0.5 deg; pairs closer than 10 deg are refused at post time.
+ *
+ * @return {Array} three formatted angles [H, U, V]
+ */
+function getBlumPartialAngles(cycle) {
+  var raw = [cycle.partialCircleAngleA, cycle.partialCircleAngleB, cycle.partialCircleAngleC];
+  var angles = [];
+  for (var i = 0; i < raw.length; ++i) {
+    var a = ((raw[i] % 360) + 360) % 360;
+    if (a > 359.0) {
+      var moved = (a >= 359.5) ? 0.0 : 359.0;
+      warning(localize("OWG: Blum partial-circle probe angle " + xyzFormat.format(a) + " deg moved to " +
+        xyzFormat.format(moved) + " deg (Blum O8711 accepts 0 to 359 deg only)."));
+      a = moved;
+    }
+    angles.push(a);
+  }
+  for (var j = 0; j < 3; ++j) {
+    for (var k = j + 1; k < 3; ++k) {
+      if (Math.abs(angles[j] - angles[k]) < 10.0) {
+        error(localize("OWG: Blum partial-circle probe angles " + xyzFormat.format(angles[0]) + ", " +
+          xyzFormat.format(angles[1]) + ", " + xyzFormat.format(angles[2]) +
+          " deg: two are less than 10 deg apart as Blum O8711 measures them (no wrap-around, e.g. 355 and 5 count as 350 apart but 3 and 8 as 5). " +
+          "Change the partial-circle angles in Fusion."));
+      }
+    }
+  }
+  return [xyzFormat.format(angles[0]), xyzFormat.format(angles[1]), xyzFormat.format(angles[2])];
+}
+
 function noSpindle() {
   // Do not output D, S, M3/4 during G100 for Tap/Probe operations
   var noSpindle = isTappingCycle(currentSection) || tool.type == TOOL_PROBE;
@@ -1781,7 +1817,8 @@ function writeProbeCycle(cycle, x, y, z) {
         writeBlock(gFormat.format(65), "P" + 8823, "A" + xyzFormat.format(cycle.partialCircleAngleA), "B" + xyzFormat.format(cycle.partialCircleAngleB), "C" + xyzFormat.format(cycle.partialCircleAngleC), "D" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
       } else {
         // Upstream commit 213dc15: Blum partial circular boss Z height offset for probe stylus radius
-        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleA)), "U" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleB)), "V" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleC)), "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth + (tool.diameter / 2)), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
+        var blumAngles = getBlumPartialAngles(cycle); // OWG v3_7: O8711 accepts 0..359 deg
+        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + blumAngles[0], "U" + blumAngles[1], "V" + blumAngles[2], "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Z" + xyzFormat.format(z - cycle.depth + (tool.diameter / 2)), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(cycle.probeClearance), getProbingArguments(cycle, true));
         writeExtraBlumProbing(cycle);
       }
       break;
@@ -1799,7 +1836,8 @@ function writeProbeCycle(cycle, x, y, z) {
       if (getProperty("probingType") == "Renishaw") {
         writeBlock(gFormat.format(65), "P" + 8823, "A" + xyzFormat.format(cycle.partialCircleAngleA), "B" + xyzFormat.format(cycle.partialCircleAngleB), "C" + xyzFormat.format(cycle.partialCircleAngleC), "D" + xyzFormat.format(cycle.width1), "Q" + xyzFormat.format(cycle.probeOvertravel), getProbingArguments(cycle, true));
       } else {
-        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleA)), "U" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleB)), "V" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleC)), "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Q" + xyzFormat.format(cycle.probeOvertravel), getProbingArguments(cycle, true));
+        var blumAngles = getBlumPartialAngles(cycle); // OWG v3_7: O8711 accepts 0..359 deg
+        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + blumAngles[0], "U" + blumAngles[1], "V" + blumAngles[2], "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "S" + xyzFormat.format(cycle.width1), "Q" + xyzFormat.format(cycle.probeOvertravel), getProbingArguments(cycle, true));
         writeExtraBlumProbing(cycle);
       }
       break;
@@ -1817,7 +1855,8 @@ function writeProbeCycle(cycle, x, y, z) {
       if (getProperty("probingType") == "Renishaw") {
         writeBlock(gFormat.format(65), "P" + 8823, "Z" + xyzFormat.format(z - cycle.depth), "A" + xyzFormat.format(cycle.partialCircleAngleA), "B" + xyzFormat.format(cycle.partialCircleAngleB), "C" + xyzFormat.format(cycle.partialCircleAngleC), "D" + xyzFormat.format(cycle.width1), "Q" + xyzFormat.format(cycle.probeOvertravel), "R" + xyzFormat.format(-cycle.probeClearance), getProbingArguments(cycle, true));
       } else {
-        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleA)), "U" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleB)), "V" + xyzFormat.format(ensurePositiveAngle(cycle.partialCircleAngleC)), "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "R" + xyzFormat.format(-cycle.probeClearance), "S" + xyzFormat.format(cycle.width1), "Q" + xyzFormat.format(cycle.probeOvertravel), "Z" + xyzFormat.format(z - cycle.depth + (tool.diameter /2)), getProbingArguments(cycle, true));
+        var blumAngles = getBlumPartialAngles(cycle); // OWG v3_7: O8711 accepts 0..359 deg
+        writeBlock(gFormat.format(65), "P" + 8700, "A1", "M3", "H" + blumAngles[0], "U" + blumAngles[1], "V" + blumAngles[2], "I" + xyzFormat.format(x), "J" + xyzFormat.format(y), "R" + xyzFormat.format(-cycle.probeClearance), "S" + xyzFormat.format(cycle.width1), "Q" + xyzFormat.format(cycle.probeOvertravel), "Z" + xyzFormat.format(z - cycle.depth + (tool.diameter /2)), getProbingArguments(cycle, true));
         writeExtraBlumProbing(cycle);
       }
       break;
