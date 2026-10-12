@@ -9,6 +9,10 @@
 
   FORKID {C09133CD-6F13-4DFC-9EB8-41260FBB5B08}
 
+  OWG BUILD: v3.7.11  2026-10-12  (TESTING)
+  Also shown in the Fusion post description and as the second line of every NC file
+  (after the program name): (OWG POST V3.7.11 2026-10-12). Bump OWG_POST_BUILD + description on every change.
+
   NOTES:
   It's essential that you change:
   - "User Param Switch 1": 0039 (Travel of X, Y or Z axis when tool length/tool position offset is changed) to true.
@@ -204,7 +208,10 @@
     * Added support for in-cycle 'laser_length' and 'measure_length' actions.
 */
 
-description = "Brother Speedio C00 (OWG v3.7 TESTING - Blum Laser & Z-Nano)";
+// OWG: keep the build in description, OWG_POST_BUILD and the header comment identical
+var OWG_POST_BUILD = "3.7.11";
+var OWG_POST_DATE = "2026-10-12";
+description = "Brother Speedio C00 (OWG v3.7.11 2026-10-12 TESTING - Blum Laser & Z-Nano)";
 vendor = "Brother";
 vendorUrl = "http://www.brother.com";
 legal = "Copyright (C) 2012-2026 by Autodesk, Inc, 2026 HiFly CNC";
@@ -5215,6 +5222,7 @@ properties.writeTools = {
   scope      : "post"
 };
 function writeProgramHeader() {
+  writeComment("OWG POST V" + OWG_POST_BUILD + " " + OWG_POST_DATE); // OWG: identifies the post build on the machine
   writeComment("File: " + getGlobalParameter("document-path"));
   writeComment("Date: " + getGlobalParameter("generated-at"));
 

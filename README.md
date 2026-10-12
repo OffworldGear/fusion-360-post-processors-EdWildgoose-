@@ -5,6 +5,12 @@
 > Branch `SpeedioC00Updates-OWG`. Nothing in this release has run on the machine yet.
 > Follow the [prove-out procedure](#prove-out-procedure-first-run) before cutting parts.
 
+**Which build am I running?** Every NC file starts with the program name, then
+`(OWG POST V3.7.11 2026-10-12)`. The same build shows in Fusion's post description and in the
+`OWG BUILD:` line at the top of the `.cps`. If a posted program has no `OWG POST` line, it was
+made by an older post - re-post it. (The Autodesk header at the top of the file is the same in
+every version and does not identify the build.)
+
 Machine: Brother Speedio **S500X2, C00 controller**, metric, 3-axis.
 Tool setters: **Blum Z-Nano** touch setter (primary length) and **Blum Laser NT** (V5DE cycles
 O86xx: wear/runout, break detection, length cross-check).
@@ -311,6 +317,9 @@ Blum call. Known limitations - prefer the post / O6009 path:
 ---
 
 ## Version history
+- **v3.7.11 (2026-10-12)**: build number added (description, NC header line, `.cps` header).
+  Builds 3.7.1-3.7.10 (2026-09-29 to 2026-10-12) are the v3.7 commits on this branch, the last
+  being the G49-before-Blum fix for SM2033 (+Z) in the Z-Nano break check.
 - **v3.7 / Rev C (2026-09-29, testing)**: crash-safety review. See [Why v3.7](#why-v37) and the header
   of the `.cps` file.
 - v3.6 / Rev B: drill taper radians fix, lollipop classification, IF-GOTO syntax, laserRunoutTolerance.
