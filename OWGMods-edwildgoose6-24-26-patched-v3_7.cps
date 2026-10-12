@@ -2973,6 +2973,13 @@ function writeMeasureTools() {
     writeBlock(mFormat.format(0), formatComment(localize("Read note"))); // wait for operator
     writeComment(localize("With B SKIP turned off each tool be automatically measured"));
     writeComment(localize("Once the tools are verified turn B SKIP on to skip verification"));
+    // OWG v3_7: G49 at Z reference before the first measuring cycle - a G43 left active by a
+    // previous program makes Z-Nano O8915 move up into the +Z limit (SM2033)
+    forceModals(gMotionModal, gAbsIncModal);
+    writeBlock(gFormat.format(28), gAbsIncModal.format(91), "Z0.");
+    writeBlock(gAbsIncModal.format(90));
+    toolLengthCompOutput.reset();
+    writeBlock(toolLengthCompOutput.format(49));
 
     for (var j = 0; j < jobs.length; ++j) {
       var job = jobs[j];
@@ -4143,11 +4150,18 @@ function forceAny() {
 function prepareForToolCheck() {
   // OWG v3_7: refuse when a G68 probe rotation would be destroyed by the Blum cycle
   validateToolCheckAllowed();
-  // OWG v3_5: Enforce spindle retraction to machine reference (G28/G53) prior to tool check
-  // Eliminates hazard of Brother SM4054 and prevents rapid moves toward laser while in workpiece
-  if (!state.retractedZ) {
-    writeRetract(Z);
-  }
+  // OWG v3_5: Enforce spindle retraction to machine reference prior to tool check.
+  // OWG v3_7: always an explicit G28 Z reference, then G49 there (SM4054-safe).
+  // Blum Z-Nano O8915 (lines 69-72) cancels an ACTIVE G43 with an incremental Z move UP by
+  // the offset plus the tool length; from Z reference that trips SM2033 Limit exceeded (+Z).
+  // With G49 already active O8915 skips that move and re-applies G43 itself.
+  forceModals(gMotionModal, gAbsIncModal);
+  writeBlock(gFormat.format(28), gAbsIncModal.format(91), "Z0.");
+  writeBlock(gAbsIncModal.format(90));
+  state.retractedZ = true;
+  toolLengthCompOutput.reset();
+  writeBlock(toolLengthCompOutput.format(49));
+  state.lengthCompensationActive = false;
   setCoolant(COOLANT_OFF);
   onCommand(COMMAND_STOP_SPINDLE);
 }

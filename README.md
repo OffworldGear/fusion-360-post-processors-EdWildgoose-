@@ -171,6 +171,7 @@ Never-measure list with Break control on is refused at post time.
 | Post time | "In control" and "Inverse wear" comp refused. Wear comp with D ≠ T refused | post error |
 | Post time | Blum laser features refused for inch programs (Blum error E18) | post error |
 | Post time | In-cycle tool check refused while a G68 probe rotation is active (Blum overwrites #100/#101/#143 that the rotation was built from) | post error |
+| Before every Blum/Z-Nano call (and before start-of-program measuring) | `G28 G91 Z0.`, `G90`, then `G49` at Z reference. Blum Z-Nano O8915 cancels an active G43 with an incremental Z move up by offset + tool length, which from Z reference trips **SM2033 Limit exceeded (+Z)** | - |
 | After every Blum/Z-Nano call | `G28 G91 Z0.` then explicit `G90 G17 G40 G80 G94`, `G49` at Z reference. Rotation, WCS, axis, spindle and coolant caches invalidated | - |
 | O6008 / O6009 | Tool number 1-99, D 0.1-24 mm, mode B 2 or 3 | 9101 / 9102 / 9106 / 9108 |
 | O6009, and O6008 B2 | Table length must be 50-200 mm (O8671 `#111`/`#110`) | 9107 NO VALID TOOL LEN |
