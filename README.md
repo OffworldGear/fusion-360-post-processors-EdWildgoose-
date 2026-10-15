@@ -87,7 +87,7 @@ and stay with the tool in your library.
 | `OWGMods-edwildgoose6-24-26-patched-v3_6.cps`, `v3_5.cps` | - | Previous versions, kept for reference. **Do not use** (see [Why v3.7](#why-v37)) |
 | `macros/O6008.NC` | C00 program memory | Laser NT length wrapper, Rev C. B3 = measure, B2 = compare only |
 | `macros/O6009.NC` | C00 program memory | Laser NT wear/runout wrapper, Rev C |
-| `macros/O6010.NC` | C00 program memory | Rev 4: manual wear + runout check of the **spindle tool**. Edit D / flutes / type at the top, Cycle Start. Front end for O6009 (replaces the V3 that assumed 4 flutes and read the diameter from #13000+T) |
+| `macros/O6010.NC` | C00 program memory | Rev 4: manual wear + runout check of the **spindle tool**. Edit D / flutes / type at the top, Cycle Start. Front end for O6009 (replaces the V3 that measured every tool as flat near the tip and read the diameter from #13000+T) |
 | `macros/O6007.NC` | C00 program memory | Emergency cleanup (was O9900): zero cutter comp geometry T1-T99, clear flag #580 |
 | `brother speedio.cps` | - | Upstream post, for diffing |
 
@@ -163,8 +163,11 @@ move (XY, then `G43 Z H`).
 ### Manual check of the spindle tool (O6010)
 Edit the three values at the top of O6010 - **D** nominal diameter (mm), **C** number of flutes,
 **K** type (0 flat, -1 ball, corner radius = bullnose, -3 drill) - and Cycle Start in Memory mode.
-**C must be exact**: Blum's edge check slows the spindle to about 3750 / C RPM and expects exactly
-C pulses per revolution, so a wrong flute count always gives alarm 15 *CUTTING EDGE BROKEN*.
+**C must be exact at the measuring height**: Blum's edge check slows the spindle to about
+3750 / C RPM and expects exactly C pulses per revolution, so a wrong count gives alarm 15
+*CUTTING EDGE BROKEN*. On a **4-flute ball mill only 2 flutes reach the tip** - measured near the
+tip (as the old V3 O6010 did, treating every tool as flat) it always fails. K = -1 measures a ball at
+its equator, where all flutes are full diameter.
 Run O6010 standalone; from another program call O6009 directly (G65 P6010 would exceed the C00's
 4 nested G65 calls).
 
