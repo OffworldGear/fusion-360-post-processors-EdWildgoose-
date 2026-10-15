@@ -87,6 +87,7 @@ and stay with the tool in your library.
 | `OWGMods-edwildgoose6-24-26-patched-v3_6.cps`, `v3_5.cps` | - | Previous versions, kept for reference. **Do not use** (see [Why v3.7](#why-v37)) |
 | `macros/O6008.NC` | C00 program memory | Laser NT length wrapper, Rev C. B3 = measure, B2 = compare only |
 | `macros/O6009.NC` | C00 program memory | Laser NT wear/runout wrapper, Rev C |
+| `macros/O6010.NC` | C00 program memory | Rev 4: manual wear + runout check of the **spindle tool**. Edit D / flutes / type at the top, Cycle Start. Front end for O6009 (replaces the V3 that assumed 4 flutes and read the diameter from #13000+T) |
 | `macros/O6007.NC` | C00 program memory | Emergency cleanup (was O9900): zero cutter comp geometry T1-T99, clear flag #580 |
 | `brother speedio.cps` | - | Upstream post, for diffing |
 
@@ -99,7 +100,7 @@ Blum's own macros (O86xx, O89xx) are copyrighted by Blum-Novotest and are **not*
 ## Installation
 
 1. **Back up the controller first** (Data Bank > save all programs and TOLSM1).
-2. Load `O6007.NC`, `O6008.NC`, `O6009.NC` into program memory (overwrite the Rev B files).
+2. Load `O6007.NC`, `O6008.NC`, `O6009.NC`, `O6010.NC` into program memory (overwrite the Rev B files).
    Delete any old `O9900` from the PC side - the C00 cannot use programs 9000-9999.
 3. Edit the Blum start-of-cycle program **O8670** on the controller. Change line 15 from
    `G90G0G53A-30.` to `(G90G0G53A-30.)(OWG A-AXIS MOVE REMOVED)`. Nothing else changes.
@@ -158,6 +159,14 @@ Add a Manual NC **Action** before the operation:
 
 The post retracts, runs the check, restores modal state, and the next operation does a full approach
 move (XY, then `G43 Z H`).
+
+### Manual check of the spindle tool (O6010)
+Edit the three values at the top of O6010 - **D** nominal diameter (mm), **C** number of flutes,
+**K** type (0 flat, -1 ball, corner radius = bullnose, -3 drill) - and Cycle Start in Memory mode.
+**C must be exact**: Blum's edge check slows the spindle to about 3750 / C RPM and expects exactly
+C pulses per revolution, so a wrong flute count always gives alarm 15 *CUTTING EDGE BROKEN*.
+Run O6010 standalone; from another program call O6009 directly (G65 P6010 would exceed the C00's
+4 nested G65 calls).
 
 ### Break detection
 Switched on per tool in Fusion (**Break control**). It uses the tool's length setter unless tagged
