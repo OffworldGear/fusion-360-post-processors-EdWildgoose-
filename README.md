@@ -1,12 +1,12 @@
 # Fusion 360 Post Processor: Brother Speedio C00 + Blum Laser NT / Z-Nano (OWG)
 
 > [!WARNING]
-> **TESTING VERSION - v3.7 / macros Rev C (2026-09-29)**
-> Branch `SpeedioC00Updates-OWG`. Nothing in this release has run on the machine yet.
+> **TESTING VERSION - v3.8 / macros Rev D (2026-10-18)**
+> Branch `SpeedioC00Updates-v3_8`.
 > Follow the [prove-out procedure](#prove-out-procedure-first-run) before cutting parts.
 
 **Which build am I running?** Every NC file starts with the program name, then
-`(OWG POST V3.7.11 2026-10-12)`. The same build shows in Fusion's post description and in the
+`(OWG POST V3.8.0 2026-10-18)`. The same build shows in Fusion's post description and in the
 `OWG BUILD:` line at the top of the `.cps`. If a posted program has no `OWG POST` line, it was
 made by an older post - re-post it. (The Autodesk header at the top of the file is the same in
 every version and does not identify the build.)
@@ -70,7 +70,10 @@ and stay with the tool in your library.
 | Z-Nano for most tools, laser for a few | 1 = *Z-Nano only* (or compare), list the few in 5 |
 | Skip a tool that fits neither setter | put it in 6 or tag `[NO MEASURE]` |
 | Check wear on finishing tools each run | 3 = *Checked operations*, tick **Laser wear check at start** on the finishing ops |
-| Check wear mid-program | Manual NC **Action** `laser_wear` before the operation |
+| Update wear mid-program before an operation | Tick **Update tool wear before operation** on op tab, tag `[WEAR]`, or Manual NC `MEASURE_TOOL:WEAR` |
+| Auto-update wear on Wear-comp finishing passes | Post property `Auto-update laser wear before Wear-comp finishing passes` (`a3bAutoWearBeforeFinish`) |
+| Check wear/integrity without changing wear table | Tag `[CHECK]`, Manual NC `MEASURE_TOOL:CHECK`, or enable Fusion **Break control** on milling tools (O6009 B-2.0) |
+| Scan / measure spherical lollipop cutter | Post properties `b5LollipopStartAngle` (25°), `b5LollipopEndAngle` (135°), tick `11. Scan lollipop contour` or tag `[LASER SCAN]` |
 
 > **Mixing setters:** the Z-Nano and laser currently differ by roughly 10-20 µm. Until they are
 > calibrated to the same master, tools that finish the same floor or face should use the **same**
@@ -83,12 +86,14 @@ and stay with the tool in your library.
 
 | File | Install where | Purpose |
 |---|---|---|
-| `OWGMods-edwildgoose6-24-26-patched-v3_7.cps` | Fusion post library | **Current testing post** |
-| `OWGMods-edwildgoose6-24-26-patched-v3_6.cps`, `v3_5.cps` | - | Previous versions, kept for reference. **Do not use** (see [Why v3.7](#why-v37)) |
-| `macros/O6008.NC` | C00 program memory | Laser NT length wrapper, Rev C. B3 = measure, B2 = compare only |
-| `macros/O6009.NC` | C00 program memory | Laser NT wear/runout wrapper, Rev C |
-| `macros/O6010.NC` | C00 program memory | Rev 4: manual wear + runout check of the **spindle tool**. Edit D / flutes / type at the top, Cycle Start. Front end for O6009 (replaces the V3 that measured every tool as flat near the tip and read the diameter from #13000+T) |
+| `OWGMods-edwildgoose6-24-26-patched-v3_8.cps` | Fusion post library | **Current production post processor (v3.8.0)** |
+| `OWGMods-edwildgoose6-24-26-patched-v3_7.cps` | - | Previous baseline version, preserved intact for reference |
+| `OWGMods-edwildgoose6-24-26-patched-v3_6.cps`, `v3_5.cps` | - | Older versions, kept for reference. **Do not use** |
+| `macros_v3_8/O6008.NC` | C00 program memory | Laser NT length wrapper, Rev D. B-3.0 fast measure, B-2.0 fast compare. Native Blum #115 radius pass-through (Zero-Comp Guarantee) |
+| `macros_v3_8/O6009.NC` | C00 program memory | Laser NT wear/runout wrapper, Rev D. B-1.0 wear update, B-2.0 check-only, lollipop arc wear (O8606 / O8607). Native Blum #115 radius pass-through |
+| `macros/O6010.NC` | C00 program memory | Rev 4: manual wear + runout check of the **spindle tool**. Front end for O6009 |
 | `macros/O6007.NC` | C00 program memory | Emergency cleanup (was O9900): zero cutter comp geometry T1-T99, clear flag #580 |
+| `tests/` | Dev / CI environment | Automated test engine: `cps_compiler.js` (V8 vm.Script syntax), `fusion_harness.js` (CAM execution engine), `macro_validator.js` (C00 Fanuc macro validator), 4 testing tiers |
 | `brother speedio.cps` | - | Upstream post, for diffing |
 
 All `.NC` files use CRLF line endings, lines of 80 characters or less, and no nested parentheses in comments.
@@ -100,7 +105,7 @@ Blum's own macros (O86xx, O89xx) are copyrighted by Blum-Novotest and are **not*
 ## Installation
 
 1. **Back up the controller first** (Data Bank > save all programs and TOLSM1).
-2. Load `O6007.NC`, `O6008.NC`, `O6009.NC`, `O6010.NC` into program memory (overwrite the Rev B files).
+2. Load `O6007.NC`, `macros_v3_8/O6008.NC`, `macros_v3_8/O6009.NC`, `O6010.NC` into program memory (overwrite previous versions).
    Delete any old `O9900` from the PC side - the C00 cannot use programs 9000-9999.
 3. Edit the Blum start-of-cycle program **O8670** on the controller. Change line 15 from
    `G90G0G53A-30.` to `(G90G0G53A-30.)(OWG A-AXIS MOVE REMOVED)`. Nothing else changes.
@@ -113,68 +118,70 @@ Blum's own macros (O86xx, O89xx) are copyrighted by Blum-Novotest and are **not*
 5. Confirm the user parameters: **<Machine unit system> = mm** and **<Program unit> = Base**
    (switch 1). The post adds decimal points to all laser macro arguments, but other code
    assumes Base.
-6. Install `v3_7.cps` in Fusion and select it for the setup. Check the property defaults below.
+6. Install `OWGMods-edwildgoose6-24-26-patched-v3_8.cps` in Fusion and select it for the setup. Check the property defaults below.
 
 ---
 
 ## Workflow details
 
-### Proving the laser - compare-only mode
-With **1. Length method = Z-Nano + laser compare**, every Z-Nano length measurement is followed by
-`G65 P6008 B2.`. This runs Blum's **control mode**: it measures with the laser and compares against
-the table length. **It writes nothing** (O8603 skips all writes when |B| = 2).
-- If the difference exceeds **7. Laser compare tolerance** (default 0.02 mm), Blum raises alarm 16
-  (OUT OF TOLERANCE). While the setters still differ by 10-20 µm you may want 0.03 mm.
-- On success: **#581 = tool number, #582 = laser length minus table length (mm)**.
-- All laser measurements run at **12. Laser measuring RPM** (3000 = the calibration speed). During the
-  O6009 edge check Blum itself slows the spindle further (about 3750 / flutes RPM) so each flute's
-  pulse can be checked - that is expected.
-- Measure the calibration pin (T98) on both setters after warm-up. Any difference is a fixed
-  offset that affects every tool; fix it in the setter calibration, not per tool.
+### The Zero-Comp Guarantee (3-Layer Architecture)
+In earlier versions, wrapper macros wrote nominal tool diameter into the cutter compensation geometry register `#[13000+T]` during probing cycles so Blum cycles had positioning limits, and zeroed it upon exit. If an emergency stop, reset, or unhandled alarm occurred mid-cycle, a non-zero value remained in `#[13000+T]`. Combined with Fusion's **Wear** compensation (`G41/G42 D`), this would shift the cutter path by an entire nominal radius (e.g. 5 mm on a 10 mm end mill), causing a severe crash into the workpiece.
 
-### Wear / runout - O6009 with Fusion "Wear" compensation
-- Select tools with **3. Laser wear check at program start** and the per-operation checkbox,
-  the `[LASER WEAR]` tag, or a Manual NC `laser_wear` action for in-cycle checks.
-- O6009 puts the Fusion nominal diameter into cutter comp geometry `#13000+T` (Blum needs it for
-  positioning and collision limits). It runs O8603 in check mode (B1, radius only), then sets the
-  geometry back to **0**.
-- Blum writes the measured **diameter** change to `#12000+T`. The laser sees the spinning envelope
-  of the largest edge, so this one number mixes wear (-), runout (+) and the tool's size tolerance
-  against the Fusion nominal; they can partly cancel. It is the right value for Wear comp because the
-  largest edge sets the wall. Unevenness between edges (runout or a chip) is caught separately by the
-  pass/fail edge check (property 9). With Fusion
-  **Wear** compensation (`G41/G42 D`, geometry 0) that value moves the cutter directly.
-- The tool **length must already be in the table**. O6009 alarms 9107 otherwise.
+v3.8 establishes a strict **Zero-Comp Guarantee** across 3 independent defense layers:
+1. **Layer 1 (Macro Radius Pass-Through):** Native Blum `#115` radius injection is restored across `O8671`, `O6008`, and `O6009`. Nominal tool radius is passed directly to Blum cycles via `#115 = [tool.diameter / 2.0]`. The cutter comp geometry register `#[13000+T]` is **never written with nominal tool dimensions**.
+2. **Layer 2 (Native Pre-Alarm Cleanup):** Blum start/end program `O8679` (`USERENDPROG`) zeroes `#[13000+T] = 0.` and clears `#580 = 0.` before any `#3000` alarm halts execution, guaranteeing clean state on controller resets or tool-breakage aborts.
+3. **Layer 3 (Post Processor Invariant):** The post processor emits explicit `#[13000+T] = 0.0000` at program start, at every tool change, after touch probe cycles (`O8706`), and after every Blum/Z-Nano measuring cycle in `restoreModalStateAfterToolCheck`.
 
-Supported for laser wear: flat, bullnose, ball, lollipop, face, slot, dovetail, drill, reamer.
-Chamfer, thread, form, corner-rounding, tapered, taps, spot and centre drills, counterbores and
-boring bars are skipped (shown as `WEAR NO TYPE N/A` in the plan), because a single radius
-measurement is meaningless on them.
+### Fast approach length measurement & compare (`O6008`)
+- **Mode B-3.0 (Fast Approach Measure & Write):** The default length measurement mode (`writeLaserLengthBlock(tool, -3.0)`). If a valid length exists in the tool table (`#11000+T > 0`), the machine rapids directly to a 2 mm clearance plane above the laser beam, saving substantial cycle time. If the table length is 0 (a fresh tool), it automatically falls back to slow search from the upper limit. Length is updated in `#11000+T`.
+- **Mode B-2.0 (Fast Compare-Only):** With **1. Length method = Z-Nano + laser compare**, Z-Nano writes the length, followed by `G65 P6008 B-2.0`. Rapid approach (2 mm clearance) checks the laser reading against table length without writing to the table. If difference > tolerance (property 7, default 0.02 mm), Blum alarms 16. The measured difference is logged in **#582** (tool in **#581**).
+- **Tool offsets preserved:** Neither mode wipes length offset `#[11000+T]`, length wear `#[10000+T]`, or diameter wear `#[12000+T]` prior to measuring.
 
-### In-cycle checks (Manual NC)
-Add a Manual NC **Action** before the operation:
-- `laser_wear` or `measure_wear`: O6009 on the tool of that operation.
-- `laser_length` or `measure_length`: length measurement using that tool's setter (rules above).
-  Refused at post time if the tool is on the Never-measure list.
+### Laser wear update (`B-1.0`) vs. Check-only (`B-2.0`) (`O6009`)
+`O6009` supports two distinct operating modes:
+- **Mode B-1.0 (Wear Update):** Measures the spinning tool envelope and writes the measured diameter change to `#[12000+T]`. For Fusion **Wear** compensation (`G41/G42`), this offset adjusts the cutting path directly.
+- **Mode B-2.0 (Check-Only / Control Mode):** Evaluates flute condition, runout (property 9), and total diameter envelope against the wear limit (property 8) at 3000 RPM. **It writes nothing to `#[12000+T]`**, ensuring that tool integrity and breakage can be verified without altering calibrated wear values.
 
-The post retracts, runs the check, restores modal state, and the next operation does a full approach
-move (XY, then `G43 Z H`).
+Supported tool types for laser wear: flat, bullnose, ball, lollipop, face, slot, dovetail, drill, reamer. Chamfer, thread, form, and tapered tools are excluded (`WEAR NO TYPE N/A`).
 
-### Manual check of the spindle tool (O6010)
+### In-cycle wear triggering & modal safety
+Wear measurement can be triggered dynamically before any machining operation:
+1. **Per-Operation UI Checkbox:** **Update tool wear before operation (Laser O6009)** (`opUpdateWearBefore`, scope: operation) on the operation's Post Process tab runs `O6009 B-1.0` immediately before cutting.
+2. **Auto-Wear on Finishing Passes:** Post property `Auto-update laser wear before Wear-comp finishing passes` (`a3bAutoWearBeforeFinish`, scope: post) automatically triggers `O6009 B-1.0` before any milling pass using Wear compensation (`G41/G42`) where radial stock to leave is 0.
+3. **Comment Tags:** Adding `[WEAR]` or `[UPDATE WEAR]` in the operation comment triggers `O6009 B-1.0`. Adding `[CHECK]` triggers `O6009 B-2.0` (check-only).
+4. **Manual NC Actions:** Add a Manual NC **Action** before the operation:
+   - `MEASURE_TOOL:WEAR` or `laser_wear`: `O6009 B-1.0` wear update.
+   - `MEASURE_TOOL:CHECK`: `O6009 B-2.0` check-only mode.
+   - `MEASURE_TOOL:LASER` or `laser_length`: `O6008 B-3.0` fast length measurement.
+   - `MEASURE_TOOL:ZNANO`: `P8915 B0.` Z-Nano length measurement.
+   - `MEASURE_TOOL:BOTH`: Length measurement followed by `O6009 B-1.0` wear update.
+5. **Modal Safety & Prepositioning:** Every in-cycle check retracts Z (`G28 G91 Z0.`), cancels length comp (`G49`), flushes modal caches (`G90 G17 G40 G80 G94`), executes the macro, restores coolant, starts the spindle (`M3 S... / M159`), and prepositions in XY before applying `G43 Z H`.
+6. **Section Deduplication:** If multiple triggers (e.g. checkbox + tag) apply to the same operation, redundant checks are deduplicated.
+
+### End-of-operation break detection (`COMMAND_BREAK_CONTROL`)
+Fusion 360 operation break control is cleanly separated by tool type and setter:
+- **Laser NT Milling Tools (<= 24 mm):** Supported milling tools invoke `O6009 B-2.0` (Check-Only mode). The tool spins at 3000 RPM across the beam, checking for breakage and chipped flutes without touching `#[12000+T]`.
+- **Laser NT Centric Drills & Taps:** Centric tools start the spindle at 3000 RPM (`M3 S3000`), flush lookahead (`M159`), dwell 1.5 s (`G4 X1.5`), call Blum cycle `G65 P8608 H[T] X[geom.x] M1. Q[tol] W0.`, and stop the spindle (`M5`). Pointed drill geometry uses an off-center measuring position `geom.x` to prevent false break alarms.
+- **Touch Setter Tools (> 24 mm or Z-Nano):** Large tools and Z-Nano tools call touch setter break cycle `G65 P8915 B2. H[T] Q[tol]`.
+
+### Lollipop cutter support (`TOOL_MILLING_LOLLIPOP`)
+- **Arc Wear Measurement (`O8606 B-1.0`):** Computes least-squares spherical arc fit across user-defined angles `b5LollipopStartAngle` (default 25.0°) and `b5LollipopEndAngle` (default 135.0°, extending into the upper undercut hemisphere). Injects `#115 = [diameter / 2.0]` with zero-comp guards.
+- **Arc Check-Only (`O8606 B-2.0`):** Checks spherical profile against wear tolerance without altering wear registers.
+- **Contour Scanning (`O8607`):** With property `11. Scan lollipop contour with laser` enabled or tagged `[LASER SCAN]`, runs Blum continuous contour scanning.
+
+### Touch probe wear update fix (`O8706`)
+In surface probing cycles with **Update tool wear** enabled:
+- **K Factor Scaling Fix:** Fusion outputs wear correction percentage (0-100%). Blum `O8706` expects a scaling factor $K \le 2.0$. The post divides `cycle.toolWearErrorCorrection` by 100.0 (e.g. 50% $\rightarrow$ K0.5000), preventing Blum Alarm 105.05 (*CALL PARAMETERS OUT OF RANGE*).
+- **Zero-Comp Guard:** Emits `ensureWearModeZeroComp(tool.diameterOffset)` immediately after `G65 P8706` to prevent diameter comp corruption.
+
+### Manual check of the spindle tool (`O6010`)
 Edit the three values at the top of O6010 - **D** nominal diameter (mm), **C** number of flutes,
-**K** type (0 flat, -1 ball, corner radius = bullnose, -3 drill) - and Cycle Start in Memory mode.
+**K** type (0 flat, -1 ball, corner radius = bullnose, -3 drill, -5 lollipop) - and Cycle Start in Memory mode.
 **C must be exact at the measuring height**: Blum's edge check slows the spindle to about
 3750 / C RPM and expects exactly C pulses per revolution, so a wrong count gives alarm 15
 *CUTTING EDGE BROKEN*. On a **4-flute ball mill only 2 flutes reach the tip** - measured near the
-tip (as the old V3 O6010 did, treating every tool as flat) it always fails. K = -1 measures a ball at
-its equator, where all flutes are full diameter.
-Run O6010 standalone; from another program call O6009 directly (G65 P6010 would exceed the C00's
-4 nested G65 calls).
-
-### Break detection
-Switched on per tool in Fusion (**Break control**). It uses the tool's length setter unless tagged
-`[LASER BREAK]` / `[ZNANO BREAK]`; tools over 24 mm always use the Z-Nano. A tool on the
-Never-measure list with Break control on is refused at post time.
+tip it always fails. K = -1 measures a ball at its equator, where all flutes are full diameter.
+Run O6010 standalone; from another program call O6009 directly.
 
 ---
 
@@ -264,31 +271,62 @@ Crash-class problems found in v3.6 / Rev B (details in the commit message):
 | 1. Length method | **Z-Nano + laser compare** | Z-Nano only / Z-Nano + laser compare / Laser only |
 | 2. Measure length at program start | **Checked operations** | Off / Checked operations / All tools |
 | 3. Laser wear check at program start | **Checked operations** | Off / Checked operations / All tools |
+| Auto-update laser wear before Wear-comp finishing passes | **off** | `a3bAutoWearBeforeFinish`: auto-runs O6009 B-1.0 before any Wear-comp pass (G41/G42) with radial stock = 0 |
 | 4. Z-Nano only tools | empty | Tool numbers; same as `[ZNANO LEN]` |
 | 5. Laser tools | empty | Tool numbers; same as `[LASER LEN]` |
 | 6. Never measure tools | empty | Tool numbers; same as `[NO MEASURE]` |
-| 7. Laser compare tolerance (mm) | 0.02 | O6008 B2 Q |
-| 8. Max diameter change - wear + runout (mm) | 0.1 | Spinning envelope vs Fusion nominal: runout (+), wear (-) and size tolerance in one number. Written to #12000+T and used by Wear comp. O6009 U, guard 9121 |
-| 9. Uneven edge tolerance - runout or chip (mm) | 0.025 | Each edge vs the largest edge, ignores nominal. Fails on a chip or runout, can't tell which (Blum alarm 15). Pass/fail, O6009 Q |
+| 7. Laser compare tolerance (mm) | 0.02 | O6008 B-2.0 Q compare tolerance |
+| 8. Max diameter change - wear + runout (mm) | 0.1 | Spinning envelope vs Fusion nominal. Written to #12000+T and used by Wear comp. O6009 U, guard 9121 |
+| 9. Uneven edge tolerance - runout or chip (mm) | 0.025 | Each edge vs the largest edge, ignores nominal. Fails on chipped flute or runout (Blum alarm 15). Pass/fail, O6009 Q |
 | 10. Tool breakage detect tolerance | **0.04** | P8608 / P8915 break Q |
 | 11. Scan lollipop contour with laser | off | O8607 contour scan for lollipops |
-| 12. Laser measuring RPM | **3000** | Speed for every laser measurement - the calibration speed (O6011 S3000), never the tool's cutting RPM. Below 3000 refused (NT minimum); other values warn |
-| Confirm tool lengths | off | Stops with a message (Cycle Start continues) if length + length wear on the machine is shorter than the Fusion length (body + holder) by more than the tolerance. Shortfall in **#583**, tool in **#584**; message `T17 SHORT VAR 583` |
-| Confirm tool lengths tolerance (mm) | 1.0 | Allowed shortfall. A shorter tool than modeled brings the holder that much closer to the part than Fusion's collision check assumed |
+| Lollipop measuring start angle (deg) | **25.0** | `b5LollipopStartAngle`: starting angle on spherical arc for O8606 / O8607 (I parameter) |
+| Lollipop measuring end angle (deg) | **135.0** | `b5LollipopEndAngle`: ending angle on spherical arc for O8606 / O8607 (K parameter, undercut hemisphere) |
+| 12. Laser measuring RPM | **3000** | Speed for every laser measurement - the calibration speed (O6011 S3000), never the tool's cutting RPM |
+| Confirm tool lengths | off | Stops with a message if table length is shorter than modeled length by more than tolerance |
+| Confirm tool lengths tolerance (mm) | 1.0 | Allowed shortfall for collision safety |
 
-Per operation (operation dialog > **Post Process** tab): **Measure tool length at start**,
-**Laser wear check at start**.
+### Per-operation settings (Operation dialog > Post Process tab)
+- **Measure tool length at start** (`opMeasureTool`): Include tool in start-of-program length measurement.
+- **Laser wear check at start** (`opLaserWear`): Include tool in start-of-program laser wear check.
+- **Update tool wear before operation (Laser O6009)** (`opUpdateWearBefore`): Runs `O6009 B-1.0` wear update immediately before this operation.
 
-Tool comment tags: `[LASER LEN]`, `[ZNANO LEN]`/`[TOUCH LEN]`, `[NO MEASURE]`, `[LASER WEAR]`,
-`[LASER SCAN]`, `[LASER BREAK]`, `[ZNANO BREAK]`/`[TOUCH BREAK]`.
+### Tool comment tags
+- Length setter: `[LASER LEN]`, `[ZNANO LEN]` / `[TOUCH LEN]`, `[NO MEASURE]`
+- Wear triggering: `[LASER WEAR]`, `[WEAR]`, `[UPDATE WEAR]` (B-1.0 wear update), `[CHECK]` (B-2.0 check-only)
+- Contour scanning: `[LASER SCAN]`
+- Break detection setter: `[LASER BREAK]`, `[ZNANO BREAK]` / `[TOUCH BREAK]`
 
-> Fusion lists properties by their internal ID, so the IDs are prefixed (`a1LengthMethod` ...
-> `b5ScanLollipopContour`) to keep 1-11 in order. Leaving lists 4 and 5 empty is normal: every
-> tool then follows **1. Length method**.
->
-> The v3.6 properties *Optionally measure tools at start*, *Tool length setter*, *Tool length measure
-> list* and *Laser wear/runout tools* were replaced by the ones above, and properties 1-11 were
-> renamed on 2026-10-05. Existing NC programs need these set once after updating.
+### Manual NC Actions
+Insert a Manual NC **Action** before an operation:
+- `MEASURE_TOOL:WEAR` or `laser_wear`: `O6009 B-1.0` wear update
+- `MEASURE_TOOL:CHECK`: `O6009 B-2.0` check-only mode
+- `MEASURE_TOOL:LASER` or `laser_length`: `O6008 B-3.0` fast length measurement
+- `MEASURE_TOOL:ZNANO`: `P8915 B0.` Z-Nano length measurement
+- `MEASURE_TOOL:BOTH`: Length measurement followed by `O6009 B-1.0` wear update
+
+---
+
+## Automated Test & Validation Engine
+
+The repository includes a comprehensive, automated test suite in `tests/`:
+
+1. **Syntax & V8 Script Compiler (`tests/lib/cps_compiler.js`):**
+   Validates the post processor source code against the Node.js V8 execution engine (`vm.Script`) to detect syntax errors, unclosed scopes, or illegal tokens before loading into Fusion.
+2. **CAM Sandbox Harness (`tests/lib/fusion_harness.js`):**
+   Full emulation of the Autodesk Fusion CAM post processing environment in Node.js. Simulates CAM tools, section state machines, kinematics, formatters, and lifecycle hooks (`onOpen`, `onSection`, `onCommand`, `onSectionEnd`, `onClose`).
+3. **Macro Syntax Validator (`tests/lib/macro_validator.js`):**
+   Validates CNC macro files (`.NC`) against Brother Speedio C00 Fanuc/Brother macro constraints:
+   - Line length limits (<= 80 characters recommended, <= 128 max)
+   - Comment safety: no nested parentheses `( ... ( ... ) ... )`
+   - CRLF line endings
+   - Valid IF-GOTO branching syntax (no unsupported THEN keywords)
+   - Alarm number ranges (9101-9122) and alarm message lengths (<= 20 chars)
+4. **Multi-Tier Test Tiers:**
+   - `tier1_feature`: Core feature checks (Zero-comp invariant, fast approach modes, wear vs check-only, lollipop arc wear, break control).
+   - `tier2_boundary`: Extreme values, zero-tolerances, maximum tool diameters, aperture limits.
+   - `tier3_pairwise`: Setter combinations, tool types, and operation flag interactions.
+   - `tier4_realworld`: Complex multi-tool part programs and production setups.
 
 ---
 
@@ -302,16 +340,16 @@ hand on feed hold.
    Confirm it passes the unit check; set #580 = 5 by hand and confirm alarm 9122 appears and #13005/#580 are cleared.
 3. **O6008 compare, standalone**: a short program with a known flat end mill that the Z-Nano already
    measured:
-   `G65 P6008 B2. T5. D12.7 C3. K0. Q0.02 Z0.5 X5.08` then `M30`.
-   Watch the approach to the laser. Afterwards check #580 = 0, #13005 = 0, and #582 (difference).
-4. **O6009 standalone**: same tool, `G65 P6009 T5. D12.7 C3. K0. U0.1 Z0.5 X5.08`, then `M30`.
-   Check #12005 (wear), #13005 = 0, #580 = 0.
-5. **O6009 guard**: pick an empty pocket number with length 0 in the table and call O6009 with it:
+   `G65 P6008 B-2. T5. D12.7 C3. K0. Q0.02 Z0.5 X5.08` then `M30`.
+   Watch the fast 2mm approach to the laser. Afterwards check #580 = 0, #13005 = 0, and #582 (difference).
+4. **O6009 standalone wear update**: same tool, `G65 P6009 B-1. T5. D12.7 C3. K0. U0.1 Z0.5 X5.08`, then `M30`.
+   Check #12005 (wear updated), #13005 = 0, #580 = 0.
+5. **O6009 standalone check-only**: same tool, `G65 P6009 B-2. T5. D12.7 C3. K0. U0.1 Z0.5 X5.08`, then `M30`.
+   Check #12005 (wear unchanged), #13005 = 0, #580 = 0.
+6. **O6009 guard**: pick an empty pocket number with length 0 in the table and call O6009 with it:
    it must alarm **9107** without moving.
-6. **In-cycle**: post a small job with a Manual NC `laser_wear` before a finishing pass that uses the
-   same tool. Single-block through the restore blocks (`G28 G91 Z0.`, `G90 G17 G40 G80 G94`, `G49`)
-   and the approach move (`G0 X Y`, `G43 Z H`) - air-cut first.
-7. **Wear guard**: set #12005 = 0.2 by hand and run a Wear-comp job with T5. It must alarm **9121**
+7. **In-cycle wear update**: post a small job with checkbox **Update tool wear before operation** or Manual NC `MEASURE_TOOL:WEAR` before a finishing pass. Single-block through the restore blocks (`G28 G91 Z0.`, `G90 G17 G40 G80 G94`, `G49`) and the approach move (`G0 X Y`, `G43 Z H`) - air-cut first.
+8. **Wear guard**: set #12005 = 0.2 by hand and run a Wear-comp job with T5. It must alarm **9121**
    before cutting. Put the value back.
 
 ---
@@ -329,6 +367,15 @@ Blum call. Known limitations - prefer the post / O6009 path:
 ---
 
 ## Version history
+- **v3.8.0 (2026-10-18)**: Stage 8 architectural upgrade (`OWGMods-edwildgoose6-24-26-patched-v3_8.cps`, `macros_v3_8/` Rev D):
+  - **Zero-Comp Guarantee**: Native Blum `#115` radius pass-through restored in O8671, O6008, O6009; nominal dimensions never written into `#[13000+T]`; `O8679` pre-alarm cleanup; explicit post zero-comp guards at start, tool changes, and after all tool cycles.
+  - **Fast Approach Modes**: `O6008 B-3.0` fast 2mm approach (auto slow search fallback); `O6008 B-2.0` fast compare mode; tool table offsets preserved.
+  - **Laser Wear vs Check-Only**: `O6009 B-1.0` updates wear register `#[12000+T]`; `O6009 B-2.0` check-only mode tests breakage/runout without modifying table.
+  - **In-Cycle Wear Triggering**: UI checkbox `opUpdateWearBefore`, post property `a3bAutoWearBeforeFinish`, tags `[WEAR]`/`[CHECK]`, Manual NC `MEASURE_TOOL` actions, modal restore safety, and deduplication.
+  - **End-of-Operation Break Control**: Redesigned `COMMAND_BREAK_CONTROL` (O6009 B-2.0 check-only for milling; running spindle P8608 with geom.x offset for drills/taps; P8915 B2. for touch tools).
+  - **Lollipop Cutters**: `O8606` least-squares arc fit across `I`..`K` angles (`b5LollipopStartAngle`/`EndAngle`); `O8607` contour scan; `#115` radius injection.
+  - **Touch Probe Wear Update**: Divided `cycle.toolWearErrorCorrection` by 100.0 to prevent Alarm 105.05 ($K \le 2.0$ limit); emitted `ensureWearModeZeroComp`.
+  - **Automated Test Suite**: Added test harness, V8 script compiler validation, and C00 macro validator.
 - **v3.7.11 (2026-10-12)**: build number added (description, NC header line, `.cps` header).
   Builds 3.7.1-3.7.10 (2026-09-29 to 2026-10-12) are the v3.7 commits on this branch, the last
   being the G49-before-Blum fix for SM2033 (+Z) in the Z-Nano break check.
