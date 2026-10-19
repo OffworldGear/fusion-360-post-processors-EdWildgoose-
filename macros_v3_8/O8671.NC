@@ -4,6 +4,7 @@
 (MGI 8/7/2026 set X,Y, Z center point.)
 (MGI MariTool calibration tool .15in rad 4.4999in len .5in pin)
 (MGI TIR measured undetectable with micron indicator. Set macro memory to 600)
+(OWG 2026-10-18 KEEP #115=#115 SO O8633 USES POST RADIUS WITHOUT #13000+T)
 #180=0 (LANGUAGE 0=ENGLISH.1=GERMAN.2=FRENCH.3=ITALIAN.4=SPANISH)
 (5=DUTCH.6=SWEDISH.7=POLISH.8=DANISH.9=CZECH)
 #141=4 (REPETITION TRIES)
