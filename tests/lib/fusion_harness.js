@@ -78,6 +78,9 @@ const CONSTANTS = {
   ENABLE_ALL: 1,
   EULER_ZXZ_R: 1,
   EULER_XYZ_R: 2,
+  EULER_ZXZ_S: 3,
+  EULER_XYZ_S: 4,
+  POLAR_MODE_OFF: 0,
   OPTIMIZE_AXIS: 1,
   OPTIMIZE_NONE: 0,
   OPTIMIZE_BOTH: 2,
@@ -222,17 +225,43 @@ class Vector {
   isZero() {
     return Math.abs(this.x) < 1e-9 && Math.abs(this.y) < 1e-9 && Math.abs(this.z) < 1e-9;
   }
+
+  isNonZero() {
+    return !this.isZero();
+  }
+
+  getNormalized() {
+    return this.unit;
+  }
+
+  getAbsolute() {
+    return new Vector(Math.abs(this.x), Math.abs(this.y), Math.abs(this.z));
+  }
 }
 
 // --- Matrix Primitive ---
 
 class Matrix {
-  constructor() {
-    this.m = [
-      1, 0, 0,
-      0, 1, 0,
-      0, 0, 1
-    ];
+  constructor(v1, v2, v3) {
+    if (v1 instanceof Vector && v2 instanceof Vector && v3 instanceof Vector) {
+      this.m = [
+        v1.x, v2.x, v3.x,
+        v1.y, v2.y, v3.y,
+        v1.z, v2.z, v3.z
+      ];
+    } else {
+      this.m = [
+        1, 0, 0,
+        0, 1, 0,
+        0, 0, 1
+      ];
+    }
+  }
+
+  static diff(m1, m2) {
+    const f1 = (m1 && m1.forward) ? m1.forward : new Vector(0, 0, 1);
+    const f2 = (m2 && m2.forward) ? m2.forward : new Vector(0, 0, 1);
+    return Vector.diff(f1, f2);
   }
 
   get forward() {
@@ -347,25 +376,35 @@ function createFormatHelper(spec = {}) {
 
 function createOutputVariableHelper(spec = {}, formatObj) {
   const prefix = spec.prefix !== undefined ? spec.prefix : '';
-  const force = spec.force !== undefined ? spec.force : false;
-  let currentVal = undefined;
+  const force = spec.force !== undefined ? spec.force : (spec.control === CONSTANTS.CONTROL_FORCE);
+  const nonZero = spec.control === CONSTANTS.CONTROL_NONZERO;
+  const onchange = typeof spec.onchange === 'function' ? spec.onchange : null;
+  let currentRawVal = spec.current !== undefined ? spec.current : undefined;
+  let currentFormatted = (spec.current !== undefined && formatObj) ? formatObj.format(spec.current) : (spec.current !== undefined ? String(spec.current) : undefined);
   let enabled = true;
 
   return {
     format: function(val) {
       if (!enabled || val === undefined || val === null) return '';
+      if (nonZero && Number(val) === 0) return '';
       const formatted = (formatObj ? formatObj.format(val) : String(val));
-      if (!force && formatted === currentVal) {
+      const changed = (formatted !== currentFormatted);
+      if (!force && !changed) {
         return '';
       }
-      currentVal = formatted;
+      currentRawVal = val;
+      currentFormatted = formatted;
+      if (onchange) {
+        onchange();
+      }
       return prefix + formatted;
     },
     reset: function() {
-      currentVal = undefined;
+      currentRawVal = undefined;
+      currentFormatted = undefined;
     },
     getCurrent: function() {
-      return currentVal;
+      return currentRawVal;
     },
     isEnabled: function() {
       return enabled;
@@ -380,27 +419,7 @@ function createOutputVariableHelper(spec = {}, formatObj) {
 }
 
 function createModalHelper(spec = {}, formatObj) {
-  let lastVal = undefined;
-  const prefix = spec.prefix !== undefined ? spec.prefix : '';
-  const force = spec.force !== undefined ? spec.force : false;
-
-  return {
-    format: function(val) {
-      if (val === undefined || val === null) return '';
-      const formatted = formatObj ? formatObj.format(val) : String(val);
-      if (!force && formatted === lastVal) {
-        return '';
-      }
-      lastVal = formatted;
-      return prefix + formatted;
-    },
-    reset: function() {
-      lastVal = undefined;
-    },
-    getCurrent: function() {
-      return lastVal;
-    }
-  };
+  return createOutputVariableHelper(spec, formatObj);
 }
 
 /**
@@ -495,12 +514,12 @@ class FusionPostHarness {
       setSafePlungeFeedrate: (f) => {},
       setRewindStockExpansion: (e) => {},
       setMultiAxisFeedrate: () => {},
-      getAxisU: () => null,
-      getAxisV: () => null,
-      getAxisW: () => null,
-      getAxisX: () => null,
-      getAxisY: () => null,
-      getAxisZ: () => null,
+      getAxisU: () => ({ isEnabled: () => false, getAxis: () => new Vector(0, 0, 0), isTable: () => false, isTCPEnabled: () => false, getCoordinate: () => 0 }),
+      getAxisV: () => ({ isEnabled: () => false, getAxis: () => new Vector(0, 0, 0), isTable: () => false, isTCPEnabled: () => false, getCoordinate: () => 1 }),
+      getAxisW: () => ({ isEnabled: () => false, getAxis: () => new Vector(0, 0, 0), isTable: () => false, isTCPEnabled: () => false, getCoordinate: () => 2 }),
+      getAxisX: () => ({ isEnabled: () => true, getAxis: () => new Vector(1, 0, 0), isTable: () => true, getCoordinate: () => 0, getRange: () => ({ isNonRange: () => true, minimum: -500, maximum: 500 }) }),
+      getAxisY: () => ({ isEnabled: () => true, getAxis: () => new Vector(0, 1, 0), isTable: () => true, getCoordinate: () => 1, getRange: () => ({ isNonRange: () => true, minimum: -400, maximum: 400 }) }),
+      getAxisZ: () => ({ isEnabled: () => true, getAxis: () => new Vector(0, 0, 1), isTable: () => false, getCoordinate: () => 2, getRange: () => ({ isNonRange: () => true, minimum: 0, maximum: 480 }) }),
       getMultiAxisFeedrateMode: () => 1,
       getMultiAxisFeedrateInverseTimeUnits: () => 1,
       getMultiAxisFeedrateDPMType: () => 1,
@@ -532,6 +551,10 @@ class FusionPostHarness {
       getProperty: () => undefined
     };
 
+    let currentPosition = new Vector(0, 0, 0);
+    let currentDirection = new Vector(0, 0, 1);
+    let currentABC = new Vector(0, 0, 0);
+
     const sandbox = {
       // Base JavaScript & Node
       console,
@@ -557,14 +580,18 @@ class FusionPostHarness {
       // Constants & Engine Properties
       ...CONSTANTS,
       unit: CONSTANTS.MM,
+      highFeedMapping: CONSTANTS.HIGH_FEED_NO_MAPPING,
+      highFeedrate: 5000,
       spatial: function(val, u) { return val; },
       radiusCompensation: CONSTANTS.RADIUS_COMPENSATION_OFF,
       revision: 50328,
       supportedFeatures: 0,
       setCodePage: function(cp) {},
+      activateAutoPolarMode: function() {},
+      optimizeMachineAngles2: function() {},
       receivedMachineConfiguration: false,
       formatComment: function(c) { return String(c).replace(/[()]/g, ''); },
-      getSimulationStreamPath: function() { return undefined; },
+      getSimulationStreamPath: function() { return ''; },
       filterText: function(text, permittedChars) {
         if (!text) return '';
         if (!permittedChars) return String(text);
@@ -619,9 +646,19 @@ class FusionPostHarness {
           sandbox.properties[name] = val;
         }
       },
-      hasGlobalParameter: function(name) { return false; },
-      getGlobalParameter: function(name, defaultVal) { return defaultVal; },
-      setGlobalParameter: function(name, val) {},
+      hasGlobalParameter: function(name) {
+        return sandbox.globalParameters && sandbox.globalParameters[name] !== undefined;
+      },
+      getGlobalParameter: function(name, defaultVal = '') {
+        if (sandbox.globalParameters && sandbox.globalParameters[name] !== undefined) {
+          return sandbox.globalParameters[name];
+        }
+        return defaultVal;
+      },
+      setGlobalParameter: function(name, val) {
+        if (!sandbox.globalParameters) sandbox.globalParameters = {};
+        sandbox.globalParameters[name] = val;
+      },
 
       getParameter: function(name, defaultVal) {
         if (sandbox.currentSection && typeof sandbox.currentSection.getParameter === 'function') {
@@ -642,20 +679,30 @@ class FusionPostHarness {
 
       // Kinematics & Machine Configuration
       createAxis: function(spec) {
+        const axVec = Array.isArray(spec.axis) ? new Vector(spec.axis[0], spec.axis[1], spec.axis[2]) : (spec.axis || new Vector(1, 0, 0));
         return {
           coordinate: spec.coordinate || 0,
           table: !!spec.table,
-          axis: spec.axis || [1, 0, 0],
+          axis: axVec,
           range: spec.range || [-360, 360],
           preference: spec.preference || 0,
           tcp: !!spec.tcp,
-          cyclic: !!spec.cyclic
+          cyclic: !!spec.cyclic,
+          isEnabled: () => true,
+          getAxis: () => axVec,
+          isTable: () => !!spec.table,
+          isTCPEnabled: () => !!spec.tcp,
+          getCoordinate: () => spec.coordinate || 0
         };
       },
       MachineConfiguration: function(...axes) {
         this.axes = axes;
         Object.assign(this, mockMachineConfig);
         this.isMultiAxisConfiguration = () => axes.length > 0;
+        const disabledAxis = (c) => ({ isEnabled: () => false, getAxis: () => new Vector(0, 0, 0), isTable: () => false, isTCPEnabled: () => false, getCoordinate: () => c });
+        this.getAxisU = () => axes[0] || disabledAxis(0);
+        this.getAxisV = () => axes[1] || disabledAxis(1);
+        this.getAxisW = () => axes[2] || disabledAxis(2);
       },
       setMachineConfiguration: function(config) {
         sandbox.machineConfiguration = config;
@@ -663,7 +710,7 @@ class FusionPostHarness {
 
       // Geometry & Math Classes
       Vector: function(x, y, z) { return new Vector(x, y, z); },
-      Matrix: function() { return new Matrix(); },
+      Matrix: function(v1, v2, v3) { return new Matrix(v1, v2, v3); },
       toPreciseUnit: function(val, u) { return u === CONSTANTS.IN ? val / 25.4 : val; },
       toUnit: function(val, u) { return u === CONSTANTS.IN ? val / 25.4 : val; },
       toRad: function(deg) { return (deg * Math.PI) / 180; },
@@ -729,10 +776,20 @@ class FusionPostHarness {
       localize: function(str) {
         return String(str);
       },
+      subst: function(str, ...args) {
+        let res = String(str);
+        for (let i = 0; i < args.length; i++) {
+          res = res.replace(new RegExp(`%${i + 1}`, 'g'), String(args[i]));
+        }
+        return res;
+      },
       error: function(msg) {
         self.errors.push(String(msg));
       },
       warning: function(msg) {
+        self.warnings.push(String(msg));
+      },
+      warningOnce: function(msg, id) {
         self.warnings.push(String(msg));
       },
       getToolTypeName: function(typeId) {
@@ -743,9 +800,20 @@ class FusionPostHarness {
           [CONSTANTS.TOOL_MILLING_CHAMFER]: 'chamfer mill',
           [CONSTANTS.TOOL_MILLING_FACE]: 'face mill',
           [CONSTANTS.TOOL_MILLING_SLOT]: 'slot mill',
+          [CONSTANTS.TOOL_MILLING_RADIUS]: 'corner rounding mill',
+          [CONSTANTS.TOOL_MILLING_DOVETAIL]: 'dovetail mill',
+          [CONSTANTS.TOOL_MILLING_TAPERED]: 'tapered mill',
+          [CONSTANTS.TOOL_MILLING_LOLLIPOP]: 'lollipop mill',
           [CONSTANTS.TOOL_DRILL]: 'drill',
+          [CONSTANTS.TOOL_DRILL_CENTER]: 'center drill',
           [CONSTANTS.TOOL_DRILL_SPOT]: 'spot drill',
+          [CONSTANTS.TOOL_DRILL_BLOCK]: 'block drill',
+          [CONSTANTS.TOOL_COUNTER_BORE]: 'counterbore',
+          [CONSTANTS.TOOL_COUNTER_SINK]: 'countersink',
+          [CONSTANTS.TOOL_REAMER]: 'reamer',
           [CONSTANTS.TOOL_TAP_RIGHT_HAND]: 'right hand tap',
+          [CONSTANTS.TOOL_TAP_LEFT_HAND]: 'left hand tap',
+          [CONSTANTS.TOOL_BORING_BAR]: 'boring bar',
           [CONSTANTS.TOOL_PROBE]: 'probe'
         };
         return names[typeId] || 'tool';
@@ -760,6 +828,7 @@ class FusionPostHarness {
       tool: null,
       tools: [],
       sections: [],
+      globalParameters: {},
 
       // Query APIs
       getNumberOfSections: () => sandbox.sections.length,
@@ -792,41 +861,84 @@ class FusionPostHarness {
       }),
       getFirstTool: () => sandbox.tools[0] || null,
       getNextTool: (t) => {
-        const idx = sandbox.tools.findIndex(x => x.number === t.number);
+        if (typeof t === 'boolean') {
+          if (!sandbox.currentSection) return null;
+          const nextSec = sandbox.getNextSection();
+          return nextSec ? nextSec.getTool() : (t ? sandbox.getFirstTool() : null);
+        }
+        const idx = sandbox.tools.findIndex(x => x.number === (t && t.number !== undefined ? t.number : t));
         return idx >= 0 && idx < sandbox.tools.length - 1 ? sandbox.tools[idx + 1] : null;
       },
 
       // Section State Queries
-      isProbeOperation: () => false,
-      isInspectionOperation: () => false,
-      isTappingCycle: () => false,
-      isDrillingCycle: () => false,
-      is3D: () => false,
+      isProbeOperation: (sec) => {
+        const s = sec || sandbox.currentSection;
+        if (!s) return false;
+        if (s.isInspectionOperation || s.strategy === 'inspectSurface') return false;
+        const t = typeof s.getTool === 'function' ? s.getTool() : s.tool;
+        return s.strategy === 'probe' || s.strategy === 'probe_wcs' || s.strategy === 'probe_geometry' || s.isProbeOperation === true || (t && t.type === CONSTANTS.TOOL_PROBE);
+      },
+      isInspectionOperation: (sec) => {
+        const s = sec || sandbox.currentSection;
+        if (!s) return false;
+        return s.isInspectionOperation === true || s.strategy === 'inspectSurface';
+      },
+      isTappingCycle: (sec) => {
+        const s = sec || sandbox.currentSection;
+        if (!s) return false;
+        const t = typeof s.getTool === 'function' ? s.getTool() : s.tool;
+        if (t && (t.type === CONSTANTS.TOOL_TAP_RIGHT_HAND || t.type === CONSTANTS.TOOL_TAP_LEFT_HAND)) return true;
+        const ct = s.cycleType || (s.cycle && s.cycle.type) || '';
+        return String(ct).includes('tapping');
+      },
+      isDrillingCycle: (sec) => {
+        const s = sec || sandbox.currentSection;
+        if (!s) return false;
+        if (sandbox.isProbeOperation(s) || sandbox.isInspectionOperation(s)) return false;
+        return s.strategy === 'drill' || !!s.cycle;
+      },
+      isFirstCyclePoint: () => true,
+      repositionToCycleClearance: (cycle, x, y, z) => {},
+      expandCyclePoint: (x, y, z) => {},
+      cycleExpanded: false,
+      is3D: () => {
+        if (!sandbox.sections || sandbox.sections.length === 0) return true;
+        return sandbox.sections.every(s => !s.isMultiAxis() && Vector.diff(s.workPlane.forward, new Vector(0, 0, 1)).length < 1e-4);
+      },
       isToolChangeNeeded: (curr, prev) => {
         if (!prev) return true;
         return curr.tool.number !== prev.tool.number;
       },
-      isNewWorkOffset: (curr, prev) => {
-        if (!prev) return true;
-        return curr.workOffset !== prev.workOffset;
+      isNewWorkOffset: (sec) => {
+        const s = sec || sandbox.currentSection;
+        if (!s || sandbox.isFirstSection()) return true;
+        const prev = sandbox.getPreviousSection();
+        return !prev || s.workOffset !== prev.workOffset;
       },
-      isNewWorkPlane: () => false,
+      isNewWorkPlane: (sec) => {
+        const s = sec || sandbox.currentSection;
+        if (!s || sandbox.isFirstSection()) return true;
+        const prev = sandbox.getPreviousSection();
+        if (!prev) return true;
+        return Vector.diff(s.workPlane.forward, prev.workPlane.forward).length > 1e-4;
+      },
       isPolarModeActive: () => false,
       isSameDirection: (a, b) => {
         if (!a || !b) return false;
         return Math.abs(a.x - b.x) < 1e-5 && Math.abs(a.y - b.y) < 1e-5 && Math.abs(a.z - b.z) < 1e-5;
       },
-      getCurrentDirection: () => new Vector(0, 0, 1),
-      setCurrentDirection: () => {},
-      getCurrentABC: () => new Vector(0, 0, 0),
-      setCurrentABC: () => {},
+      getCurrentDirection: () => currentDirection,
+      setCurrentDirection: (d) => { if (d) currentDirection = new Vector(d); },
+      getCurrentABC: () => currentABC,
+      setCurrentABC: (abc) => { if (abc) currentABC = new Vector(abc); },
       getRotation: () => activeRotation,
       setRotation: (r) => {
         if (r) activeRotation = r;
       },
       cancelTransformation: () => {},
-      getFramePosition: () => new Vector(0, 0, 0),
-      getCurrentPosition: () => new Vector(0, 0, 0),
+      getFramePosition: (p) => p ? new Vector(p) : new Vector(0, 0, 0),
+      getCurrentPosition: () => currentPosition,
+      setCurrentPosition: (p) => { if (p) currentPosition = new Vector(p); },
       getForwardDirection: (sec) => (sec && sec.workPlane ? sec.workPlane.forward : new Vector(0, 0, 1)),
       getWorkOffset: () => (sandbox.currentSection ? sandbox.currentSection.workOffset : 1),
       isSpeedValid: () => true,
@@ -843,15 +955,17 @@ class FusionPostHarness {
       isSpiral: () => false,
       getHelicalPitch: () => 0,
       getArcPosition: () => new Vector(0, 0, 0),
+      getNextRecord: () => ({ isMotion: () => false }),
 
       // Properties object defined by CPS
       properties: {}
     };
 
-    // Vector static bindings
+    // Vector & Matrix static bindings
     sandbox.Vector.diff = Vector.diff;
     sandbox.Vector.dot = Vector.dot;
     sandbox.Vector.cross = Vector.cross;
+    sandbox.Matrix.diff = Matrix.diff;
 
     this.vmContext = vm.createContext(sandbox);
 
@@ -956,7 +1070,30 @@ class FusionPostHarness {
         if (n === 'operation-comment') return sectionData.operationComment || `Operation ${sectionId + 1}`;
         return def;
       },
-      getGlobalZRange: () => ({ minimum: 0, maximum: 50 }),
+      getGlobalZRange: () => {
+        const r = {
+          minimum: -10,
+          maximum: 50,
+          getMinimum: function() { return this.minimum; },
+          getMaximum: function() { return this.maximum; },
+          expandTo: function(z) {
+            if (z < this.minimum) this.minimum = z;
+            if (z > this.maximum) this.maximum = z;
+          },
+          expandRange: function(other) {
+            if (other) {
+              const omin = typeof other.getMinimum === 'function' ? other.getMinimum() : other.minimum;
+              const omax = typeof other.getMaximum === 'function' ? other.getMaximum() : other.maximum;
+              if (omin < this.minimum) this.minimum = omin;
+              if (omax > this.maximum) this.maximum = omax;
+            }
+          },
+          expandToRange: function(other) {
+            this.expandRange(other);
+          }
+        };
+        return r;
+      },
       optimizeMachineAnglesByMachine: () => new Vector(0, 0, 0),
       getInitialPosition: () => initialPos,
       getFinalPosition: () => finalPos,

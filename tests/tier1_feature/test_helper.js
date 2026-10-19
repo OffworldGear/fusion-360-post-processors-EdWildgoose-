@@ -57,6 +57,19 @@ class ExtendedPostHarness extends FusionPostHarness {
     if (sectionData.operationComment !== undefined) {
       sec.parameters['operation-comment'] = sectionData.operationComment;
     }
+    if (sectionData.printResults !== undefined) {
+      sec.parameters['printResults'] = sectionData.printResults ? 1 : 0;
+    } else if (sectionData.cycle && sectionData.cycle.printResults) {
+      sec.parameters['printResults'] = 1;
+    }
+    if (sectionData.cycle && sectionData.cycle.cycleID !== undefined) {
+      sec.parameters['cycleID'] = sectionData.cycle.cycleID;
+    } else if (sectionData.cycle) {
+      sec.parameters['cycleID'] = 1;
+    }
+    if (sec.parameters['autodeskcam:operation-id'] === undefined) {
+      sec.parameters['autodeskcam:operation-id'] = sectionId + 1;
+    }
 
     // Initialize properties dictionary (operation Post Process tab)
     sec.properties = Object.assign({}, sectionData.properties || {});
@@ -88,7 +101,7 @@ class ExtendedPostHarness extends FusionPostHarness {
 
     sec.hasParameter = (name) => {
       if (name === 'operation-comment') return true;
-      return sec.parameters && sec.parameters[name] !== undefined;
+      return Boolean(sec.parameters && sec.parameters[name] !== undefined);
     };
 
     if (sectionData.probeWorkOffset !== undefined) {
@@ -120,6 +133,14 @@ class ExtendedPostHarness extends FusionPostHarness {
     }
     if (jobSpec.programComment !== undefined) {
       ctx.programComment = jobSpec.programComment;
+    }
+    if (jobSpec.unit !== undefined) {
+      ctx.unit = jobSpec.unit;
+    }
+    if (jobSpec.globalParameters) {
+      ctx.globalParameters = Object.assign({}, jobSpec.globalParameters);
+    } else {
+      ctx.globalParameters = { 'job-description': 'SETUP1' };
     }
 
     // Post-level property overrides
@@ -213,14 +234,67 @@ class ExtendedPostHarness extends FusionPostHarness {
           ctx.onAction(rawSec.action);
         }
 
-        // Probing cycle execution
-        if (rawSec.cycle && typeof ctx.writeProbeCycle === 'function') {
-          ctx.cycle = rawSec.cycle;
-          ctx.cycleType = rawSec.cycleType || rawSec.cycle.type;
-          const px = rawSec.cycleX !== undefined ? rawSec.cycleX : 0;
-          const py = rawSec.cycleY !== undefined ? rawSec.cycleY : 0;
-          const pz = rawSec.cycleZ !== undefined ? rawSec.cycleZ : 0;
-          ctx.writeProbeCycle(rawSec.cycle, px, py, pz);
+        // Cutting / positioning moves
+        if (rawSec.moves && Array.isArray(rawSec.moves)) {
+          for (const mv of rawSec.moves) {
+            if (mv.movement !== undefined && typeof ctx.onMovement === 'function') {
+              ctx.movement = mv.movement;
+              ctx.onMovement(mv.movement);
+            }
+            if (mv.radiusCompensation !== undefined && typeof ctx.onRadiusCompensation === 'function') {
+              ctx.radiusCompensation = mv.radiusCompensation;
+              ctx.onRadiusCompensation();
+            }
+            if (mv.type === 'rapid' && typeof ctx.onRapid === 'function') {
+              ctx.onRapid(mv.x, mv.y, mv.z);
+              ctx.setCurrentPosition(new Vector(mv.x, mv.y, mv.z));
+            } else if (mv.type === 'linear' && typeof ctx.onLinear === 'function') {
+              ctx.onLinear(mv.x, mv.y, mv.z, mv.feed || sec.feedrate || 1000);
+              ctx.setCurrentPosition(new Vector(mv.x, mv.y, mv.z));
+            } else if (mv.type === 'circular' && typeof ctx.onCircular === 'function') {
+              ctx.onCircular(!!mv.clockwise, mv.cx || 0, mv.cy || 0, mv.cz || 0, mv.x, mv.y, mv.z, mv.feed || sec.feedrate || 1000);
+              ctx.setCurrentPosition(new Vector(mv.x, mv.y, mv.z));
+            }
+          }
+        }
+
+        // Cycle execution (Probing, Drilling, Tapping, Boring, Inspection)
+        if (rawSec.cycle) {
+          const cycleObj = Object.assign({
+            feedrate: sec.feedrate || 1000,
+            retract: 25.0,
+            bottom: -5.0,
+            depth: 5.0,
+            clearance: 50.0,
+            probeClearance: 2.0,
+            probeOvertravel: 1.0,
+            incrementComponent: 0
+          }, rawSec.cycle);
+          ctx.cycle = cycleObj;
+          ctx.cycleType = rawSec.cycleType || cycleObj.type;
+          const pts = Array.isArray(rawSec.cyclePoints) && rawSec.cyclePoints.length > 0
+            ? rawSec.cyclePoints
+            : [{
+              x: rawSec.cycleX !== undefined ? rawSec.cycleX : 0,
+              y: rawSec.cycleY !== undefined ? rawSec.cycleY : 0,
+              z: rawSec.cycleZ !== undefined ? rawSec.cycleZ : 25.0
+            }];
+          if (typeof ctx.onCycle === 'function') {
+            ctx.onCycle();
+          }
+          for (let pi = 0; pi < pts.length; pi++) {
+            const pt = pts[pi];
+            ctx.isFirstCyclePoint = () => pi === 0;
+            if (typeof ctx.onCyclePoint === 'function') {
+              ctx.onCyclePoint(pt.x, pt.y, pt.z);
+            } else if (typeof ctx.writeProbeCycle === 'function') {
+              ctx.writeProbeCycle(cycleObj, pt.x, pt.y, pt.z);
+            }
+          }
+          ctx.isFirstCyclePoint = () => true;
+          if (typeof ctx.onCycleEnd === 'function') {
+            ctx.onCycleEnd();
+          }
         }
 
         // Section commands

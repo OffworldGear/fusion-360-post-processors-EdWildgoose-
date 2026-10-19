@@ -244,9 +244,6 @@
 var OWG_POST_BUILD = "3.8.0";
 var OWG_POST_DATE = "2026-10-18";
 description = "Brother Speedio C00 (OWG v3.8.0 2026-10-18 - Blum Laser NT & Z-Nano)";
-if (typeof highFeedMapping === "undefined") {
-  var highFeedMapping = (typeof HIGH_FEED_NO_MAPPING !== "undefined") ? HIGH_FEED_NO_MAPPING : 0;
-}
 vendor = "Brother";
 vendorUrl = "http://www.brother.com";
 legal = "Copyright (C) 2012-2026 by Autodesk, Inc, 2026 HiFly CNC";
@@ -1236,13 +1233,13 @@ function setSmoothing(mode) {
 }
 
 function printProbeResults() {
-  // Return true if "Print Results" is checked in Fusion, regardless of probe brand.
-  // This allows the POPEN command and Fusion headers to be generated for Blum probes
-  // too - the Hi-Fly base only allowed Renishaw, but this post's DPRNT spoof in
-  // onCycleEnd produces Renishaw-format output from Blum result variables, so the
-  // POPEN/PCLOS bracketing needs to fire for Blum as well. Without this fix, DPRNT
-  // lines are emitted in onCycleEnd without a preceding POPEN, tripping the
-  // Brother SM4041 "POPEN is unable" alarm.
+  // Return true if "Print Results" is checked in Fusion, regardless of probe brand,
+  // UNLESS probeResultsFormat is set to "raw" (where Blum O8716 handles POPEN/DPRNT/PCLOS
+  // internally via V-1. and any post-level DPRNT before P8700 would lack a preceding POPEN
+  // and trip the Brother SM4041 "POPEN is unable" alarm).
+  if (getProperty("probeResultsFormat") == "raw") {
+    return false;
+  }
   return (currentSection.getParameter("printResults", 0) == 1);
 }
 
@@ -4424,14 +4421,11 @@ function validateToolData() {
   var toolIds = [];
   for (var i = 0; i < getNumberOfSections(); ++i) {
     var section = getSection(i);
-    var curToolId = (typeof section.getTool == "function" && typeof section.getTool().getToolId == "function") ?
-      section.getTool().getToolId() : (typeof section.getTool == "function" ? section.getTool().number : (section.tool ? section.tool.number : i));
-    if (toolIds.indexOf(curToolId) === -1) { // loops only through sections which have a different tool ID
-      var curTool = (typeof section.getTool == "function") ? section.getTool() : section.tool;
-      var toolNumber = curTool ? curTool.number : 1;
-      var lengthOffset = curTool ? curTool.lengthOffset : 1;
-      var diameterOffset = curTool ? curTool.diameterOffset : 1;
-      var comment = (typeof section.getParameter == "function") ? section.getParameter("operation-comment", "") : "";
+    if (toolIds.indexOf(section.getTool().getToolId()) === -1) { // loops only through sections which have a different tool ID
+      var toolNumber = section.getTool().number;
+      var lengthOffset = section.getTool().lengthOffset;
+      var diameterOffset = section.getTool().diameterOffset;
+      var comment = section.getParameter("operation-comment", "");
 
       if (toolNumber > _maximumToolNumber && !getProperty("toolAsName")) {
         warnings.toolNumber.values.push(SP + toolNumber + EOL);
@@ -4442,13 +4436,12 @@ function validateToolData() {
       if (diameterOffset > _maximumToolDiameterOffset) {
         warnings.diameterOffset.values.push(SP + "Tool " + toolNumber + " (" + comment + "," + " Diameter offset: " + diameterOffset + ")" + EOL);
       }
-      toolIds.push(curToolId);
+      toolIds.push(section.getTool().getToolId());
     }
     // loop through all sections regardless of tool id for idenitfying spindle speeds
 
     // identify if movement ramp is used in current toolpath, use ramp spindle speed for comparisons
-    var ramp = (typeof section.getMovements == "function") ?
-      (section.getMovements() & ((1 << MOVEMENT_RAMP) | (1 << MOVEMENT_RAMP_ZIG_ZAG) | (1 << MOVEMENT_RAMP_PROFILE) | (1 << MOVEMENT_RAMP_HELIX))) : 0;
+    var ramp = section.getMovements() & ((1 << MOVEMENT_RAMP) | (1 << MOVEMENT_RAMP_ZIG_ZAG) | (1 << MOVEMENT_RAMP_PROFILE) | (1 << MOVEMENT_RAMP_HELIX));
     var _sectionSpindleSpeed = Math.max(section.getTool().spindleRPM, ramp ? section.getTool().rampingSpindleRPM : 0, 0);
     if (_sectionSpindleSpeed > _maximumSpindleRPM) {
       warnings.spindleSpeed.values.push(SP + section.getParameter("operation-comment", "") + " (" + _sectionSpindleSpeed + " RPM" + ")" + EOL);
@@ -4974,9 +4967,6 @@ function machineSimulation(parameters) {
 validate(settings.workPlaneMethod, "Setting 'workPlaneMethod' is required but not defined.");
 function defineWorkPlane(_section, _setWorkPlane) {
   var abc = new Vector(0, 0, 0);
-  if (!_section) {
-    return abc;
-  }
   if (settings.workPlaneMethod.forceMultiAxisIndexing || !is3D() || machineConfiguration.isMultiAxisConfiguration()) {
     if (isPolarModeActive()) {
       abc = getCurrentDirection();
@@ -5035,9 +5025,7 @@ function isTCPSupportedByOperation(_section) {
 validate(settings.machineAngles, "Setting 'machineAngles' is required but not defined.");
 function getWorkPlaneMachineABC(_section, rotate) {
   var currentABC = isFirstSection() ? new Vector(0, 0, 0) : getCurrentABC();
-  var abc = (typeof _section.getABCByPreference == "function") ?
-    _section.getABCByPreference(machineConfiguration, _section.workPlane, currentABC, settings.machineAngles.controllingAxis, settings.machineAngles.type, settings.machineAngles.options) :
-    new Vector(0, 0, 0);
+  var abc = _section.getABCByPreference(machineConfiguration, _section.workPlane, currentABC, settings.machineAngles.controllingAxis, settings.machineAngles.type, settings.machineAngles.options);
   if (!isSameDirection(machineConfiguration.getDirection(abc), _section.workPlane.forward)) {
     error(localize("Orientation not supported."));
   }
@@ -5049,9 +5037,7 @@ function getWorkPlaneMachineABC(_section, rotate) {
     } else {
       if (!_section.isOptimizedForMachine()) {
         machineConfiguration.setToolLength(getSetting("workPlaneMethod.compensateToolLength", false) ? getBodyLength(_section.getTool()) : 0); // define the tool length for head adjustments
-        if (typeof _section.optimize3DPositionsByMachine == "function") {
-          _section.optimize3DPositionsByMachine(machineConfiguration, abc, settings.workPlaneMethod.optimizeType);
-        }
+        _section.optimize3DPositionsByMachine(machineConfiguration, abc, settings.workPlaneMethod.optimizeType);
       }
     }
   }
@@ -5061,9 +5047,6 @@ function getWorkPlaneMachineABC(_section, rotate) {
 // >>>>> INCLUDED FROM include_files/positionABC.cpi
 function positionABC(abc, force) {
   if (!machineConfiguration.isMultiAxisConfiguration()) {
-    if (!abc || abc.isZero()) {
-      return;
-    }
     error("Function 'positionABC' can only be used with multi-axis machine configurations.");
   }
   if (typeof unwindABC == "function") {
@@ -5405,9 +5388,7 @@ function getCoolantCodes(coolant, format) {
   }
 
   if (!m) {
-    if (typeof onUnsupportedCoolant == "function") {
-      onUnsupportedCoolant(coolant);
-    }
+    onUnsupportedCoolant(coolant);
     m = 9;
   } else {
     if (Array.isArray(m)) {
@@ -6127,7 +6108,6 @@ function getOffsetCode(forceTCP) {
   if (tcp.isSupportedByOperation || forceTCP) {
     offsetCode = machineConfiguration.isMultiAxisConfiguration() ? 43.4 : 43.5;
   }
-  state.lengthCompensationActive = (offsetCode != 49);
   return toolLengthCompOutput.format(offsetCode);
 }
 // <<<<< INCLUDED FROM include_files/getOffsetCode_fanuc.cpi

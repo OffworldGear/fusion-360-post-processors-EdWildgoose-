@@ -43,13 +43,14 @@ const SUITES = [
   },
   {
     tier: 'Tier 2',
-    title: 'Boundary & Corner Cases (B1 - B5)',
+    title: 'Boundary & Corner Cases (B1 - B6)',
     files: [
       path.join(REPO_ROOT, 'tests/tier2_boundary/b1_zero_comp_boundaries.test.js'),
       path.join(REPO_ROOT, 'tests/tier2_boundary/b2_aperture_and_setter_boundaries.test.js'),
       path.join(REPO_ROOT, 'tests/tier2_boundary/b3_wear_limits_and_tolerances.test.js'),
       path.join(REPO_ROOT, 'tests/tier2_boundary/b4_lollipop_angle_boundaries.test.js'),
-      path.join(REPO_ROOT, 'tests/tier2_boundary/b5_touch_probe_boundaries.test.js')
+      path.join(REPO_ROOT, 'tests/tier2_boundary/b5_touch_probe_boundaries.test.js'),
+      path.join(REPO_ROOT, 'tests/tier2_boundary/b6_e2e_probing_and_gcode_verification.test.js')
     ]
   },
   {
